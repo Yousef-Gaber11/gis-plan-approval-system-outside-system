@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>اعتماد مخططات الإسكان خارج النظام</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/json-formatter-js@2.3.4/dist/json-formatter.umd.min.js"></script>
+
+    <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.28/"></script>
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <div id="sidebar">
+        <h2>اعتماد المخطط</h2>
+
+        <div class="upload-section">
+            <label for="shpFileInput" class="custom-file-upload">اختيار ملف المخطط (.zip)</label>
+            <input type="file" id="shpFileInput" accept=".zip" />
+        </div>
+
+        <hr />
+
+        <h3>مخرجات الإحصائيات (Statistics JSON)</h3>
+        <div id="jsonViewer" dir="ltr">في انتظار رفع ملف المخطط...</div>
+    </div>
+
+    <div id="viewDiv"></div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
