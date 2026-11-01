@@ -1,11 +1,5 @@
-//* ===== code -> name + color =====
-const LAND_USE = {
-  100000: { name: "residential", color: [255, 255, 100, 0.6] },
-  307079: { name: "governmentalFacility", color: [21, 19, 248, 0.6] },
-  306020: { name: "publicGarden", color: [30, 255, 150, 0.6] },
-  200000: { name: "commercial", color: [255, 20, 50, 0.6] },
-  201000: { name: "commercialmarkets", color: [255, 140, 0, 0.6] },
-};
+import { setupLayerListWidget } from "./layerManager.js";
+import { layersDictionary, LAND_USE } from "./layersConfig.js";
 
 //* ===== Helper Funs =====
 const getLandUseName = (code) =>
@@ -28,11 +22,12 @@ require([
   "esri/Map",
   "esri/views/MapView",
   "esri/layers/GeoJSONLayer",
-  "esri/renderers/UniqueValueRenderer",
-], function (Map, MapView, GeoJSONLayer, UniqueValueRenderer) {
+  "esri/widgets/LayerList",
+  "esri/widgets/Expand",
+], function (Map, MapView, GeoJSONLayer, LayerList, Expand) {
   const map = new Map({
-    //  basemap: "satellite"
-    basemap: "hybrid",
+    basemap: "satellite",
+    // basemap: "hybrid",
   });
   const view = new MapView({
     container: "viewDiv",
@@ -40,6 +35,8 @@ require([
     center: [44.3, 24.8],
     zoom: 6,
   });
+
+  setupLayerListWidget(LayerList, Expand, view);
 
   const fileInput = document.getElementById("shpFileInput");
   const jsonViewer = document.getElementById("jsonViewer");
@@ -150,13 +147,7 @@ require([
   }
 
   //* ===== Map draw =====
-  const fill = (color) => ({
-    type: "simple-fill",
-    color,
-    outline: { color: "black", width: 0.5 },
-  });
-
-  function createMapLayer(geoJson, renderer, labelClass) {
+  function createMapLayer(geoJson, renderer, labelClass, title) {
     const blob = new Blob([JSON.stringify(geoJson)], {
       type: "application/json",
     });
@@ -164,6 +155,7 @@ require([
     const layer = new GeoJSONLayer({
       url,
       renderer,
+      title: title,
       labelingInfo: labelClass ? [labelClass] : [],
     });
     const release = () => URL.revokeObjectURL(url);
@@ -173,35 +165,30 @@ require([
 
   function drawMap(layers) {
     map.removeAll();
-    const parcels = findLayer(layers, "ParcelsPolygonS");
-    if (!parcels) return;
 
-    const parcelRenderer = new UniqueValueRenderer({
-      field: "USECODE",
-      defaultSymbol: fill([255, 255, 255, 0.5]),
-      uniqueValueInfos: Object.entries(LAND_USE).map(([code, cfg]) => ({
-        value: code,
-        symbol: fill(cfg.color),
-      })),
+    layers.forEach((layerData) => {
+      const layerName = (layerData.fileName || "")
+        .split("/")
+        .pop()
+        .toLowerCase();
+
+      const config = layersDictionary[layerName];
+
+      if (config) {
+        const mapLayer = createMapLayer(
+          layerData,
+          config.renderer,
+          config.labelClass || null,
+          config.title,
+        );
+        map.add(mapLayer);
+
+        if (layerName === "parcelspolygons") {
+          mapLayer.when(() => view.goTo(mapLayer.fullExtent));
+        }
+      } else {
+        console.warn(`الطبقة ${layerName} ليس لها إعدادات في الكتالوج.`);
+      }
     });
-
-    const labelClass = {
-      symbol: {
-        type: "text",
-        color: "#000000",
-        haloColor: "#ffffff",
-        haloSize: "1.5px",
-        font: { size: 11, weight: "bold", family: "sans-serif" },
-      },
-      labelPlacement: "always-horizontal",
-      labelExpressionInfo: { expression: "$feature.PARCELNO" },
-    };
-
-    const parcelsLayer = createMapLayer(parcels, parcelRenderer, labelClass);
-    map.add(parcelsLayer);
-
-    parcelsLayer
-      .when(() => view.goTo(parcelsLayer.fullExtent))
-      .catch((err) => console.error("Layer failed to load:", err));
   }
 });
