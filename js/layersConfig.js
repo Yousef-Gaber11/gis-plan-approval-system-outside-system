@@ -25,10 +25,10 @@ export const layersDictionary = {
       },
     },
   },
-  //   plansstreetsplygonss: {
-  //     title: "شوارع المخطط - Streets",
-  //     renderer: { type: "simple", symbol: fill([200, 200, 200, 0.5]) },
-  //   },
+    plansstreetsplygonss: {
+      title: "شوارع المخطط - Streets",
+      renderer: { type: "simple", symbol: fill([200, 200, 200, 0.5]) },
+    },
   parcelspolygons: {
     title: "قطع الأراضي - Parcels",
     renderer: {
