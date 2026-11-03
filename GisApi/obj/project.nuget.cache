@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "dgSpecHash": "e7qgPIAJ8AQ=",
+  "success": true,
+  "projectFilePath": "D:\\Github_Repos\\gis-plan-approval-system-outside-system\\GisApi\\GisApi.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.12\\microsoft.aspnetcore.openapi.10.0.12.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\microsoft.extensions.apidescription.server\\10.0.0\\microsoft.extensions.apidescription.server.10.0.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\microsoft.openapi\\2.12.0\\microsoft.openapi.2.12.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\nettopologysuite\\2.0.0\\nettopologysuite.2.0.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\nettopologysuite.features\\2.1.0\\nettopologysuite.features.2.1.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\nettopologysuite.io.geojson\\4.0.0\\nettopologysuite.io.geojson.4.0.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\nettopologysuite.io.geojson4stj\\4.0.0\\nettopologysuite.io.geojson4stj.4.0.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\nettopologysuite.io.shapefile\\2.1.0\\nettopologysuite.io.shapefile.2.1.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\newtonsoft.json\\13.0.1\\newtonsoft.json.13.0.1.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\projnet\\2.1.0\\projnet.2.1.0.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\swashbuckle.aspnetcore\\10.3.1\\swashbuckle.aspnetcore.10.3.1.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\swashbuckle.aspnetcore.swagger\\10.3.1\\swashbuckle.aspnetcore.swagger.10.3.1.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\swashbuckle.aspnetcore.swaggergen\\10.3.1\\swashbuckle.aspnetcore.swaggergen.10.3.1.nupkg.sha512",
+    "C:\\Users\\COMPUMARTS\\.nuget\\packages\\swashbuckle.aspnetcore.swaggerui\\10.3.1\\swashbuckle.aspnetcore.swaggerui.10.3.1.nupkg.sha512"
+  ],
+  "logs": []
+}
