@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
-using ProjNet.CoordinateSystems;
-using ProjNet.CoordinateSystems.Transformations;
-using ProjNet.IO.CoordinateSystems;
 using System.IO.Compression;
 
 namespace GisApi.Controllers
@@ -45,19 +42,10 @@ namespace GisApi.Controllers
                     var layerName = Path.GetFileNameWithoutExtension(shpFile);
                     var geoJsonFeatures = new List<object>();
 
-                    MathTransform? transform = null;
                     var prjPath = Path.ChangeExtension(shpFile, ".prj");
-                    if (System.IO.File.Exists(prjPath))
-                    {
-                        var wkt = System.IO.File.ReadAllText(prjPath);
-                        var srcCs = CoordinateSystemWktReader.Parse(wkt) as CoordinateSystem;
-                        if (srcCs != null)
-                        {
-                            transform = new CoordinateTransformationFactory()
-                                .CreateFromCoordinateSystems(srcCs, GeographicCoordinateSystem.WGS84)
-                                .MathTransform;
-                        }
-                    }
+                    string? prjText = System.IO.File.Exists(prjPath)
+                        ? System.IO.File.ReadAllText(prjPath)
+                        : null;
 
                     using (var reader = new ShapefileDataReader(shpFile, GeometryFactory.Default))
                     {
@@ -89,12 +77,6 @@ namespace GisApi.Controllers
                             }
 
                             var geometry = reader.Geometry;
-                            if (geometry != null && transform != null)
-                            {
-                                geometry = geometry.Copy();
-                                geometry.Apply(new MathTransformFilter(transform));
-                                geometry.GeometryChanged();
-                            }
 
                             geoJsonFeatures.Add(new Dictionary<string, object?>
                             {
@@ -109,6 +91,7 @@ namespace GisApi.Controllers
                     {
                         fileName = layerName,
                         type = "FeatureCollection",
+                        prj = prjText,
                         features = geoJsonFeatures
                     });
                 }
@@ -124,22 +107,6 @@ namespace GisApi.Controllers
                 if (Directory.Exists(tempFolder))
                     Directory.Delete(tempFolder, true);
             }
-        }
-    }
-
-    public class MathTransformFilter : ICoordinateSequenceFilter
-    {
-        private readonly MathTransform _t;
-        public MathTransformFilter(MathTransform t) => _t = t;
-
-        public bool Done => false;
-        public bool GeometryChanged => true;
-
-        public void Filter(CoordinateSequence seq, int i)
-        {
-            var p = _t.Transform(new[] { seq.GetX(i), seq.GetY(i) });
-            seq.SetX(i, p[0]);
-            seq.SetY(i, p[1]);
         }
     }
 }

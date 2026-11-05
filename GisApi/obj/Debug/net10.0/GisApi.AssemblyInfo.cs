@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GisApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e4550ac9247ccc037dfc06abfbd89cd2facd1f2e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0585934d50d8e04b3e3ddd2ffba15d67e50a2831")]
 [assembly: System.Reflection.AssemblyProductAttribute("GisApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GisApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
