@@ -12,7 +12,6 @@ export async function municipalityService(code, FeatureLayer) {
     outFields: [
       "MUNICIPALITYARNAME",
       "AMANA",
-      "MUNICIPALITYUNIQUECODE",
       "ZONE",
     ],
     returnGeometry: true,

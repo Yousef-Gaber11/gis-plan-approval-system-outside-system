@@ -1,3 +1,4 @@
+//* extractFirstXCoordinate
 function extractFirstXCoordinate(geoJsonGeometry) {
   const coordinates = geoJsonGeometry.coordinates;
   const geometryType = geoJsonGeometry.type;
@@ -11,6 +12,7 @@ function extractFirstXCoordinate(geoJsonGeometry) {
 
   return null;
 }
+//* iidentifyCoordinateSystem
 export function identifyCoordinateSystem(sampleXCoordinate) {
   const isLargeCoordinate =
     sampleXCoordinate != null && Math.abs(sampleXCoordinate) > 180;
@@ -21,6 +23,7 @@ export function identifyCoordinateSystem(sampleXCoordinate) {
   };
 }
 
+//* convertGeoJsonToGeometry
 function convertGeoJsonToGeometry(
   geoJsonGeometry,
   spatialReference,
@@ -29,7 +32,6 @@ function convertGeoJsonToGeometry(
   Point,
 ) {
   const { type: geometryType, coordinates } = geoJsonGeometry;
-
   if (geometryType === "Point") {
     return new Point({
       x: coordinates[0],
@@ -37,32 +39,28 @@ function convertGeoJsonToGeometry(
       spatialReference,
     });
   }
-
   if (geometryType === "LineString") {
     return new Polyline({ paths: [coordinates], spatialReference });
   }
-
   if (geometryType === "MultiLineString") {
     return new Polyline({ paths: coordinates, spatialReference });
   }
-
   if (geometryType === "Polygon") {
     return new Polygon({
       rings: coordinates,
       spatialReference,
     });
   }
-
   if (geometryType === "MultiPolygon") {
     return new Polygon({
       rings: coordinates.flat(1),
       spatialReference,
     });
   }
-
   return null;
 }
 
+//* convertGeometryToGeoJsonCoords
 function convertGeometryToGeoJsonCoords(projectedGeometry, geometryType) {
   if (geometryType === "Point")
     return [projectedGeometry.x, projectedGeometry.y];
@@ -74,6 +72,7 @@ function convertGeometryToGeoJsonCoords(projectedGeometry, geometryType) {
   return null;
 }
 
+//*reprojectLayerFeatures
 function reprojectLayerFeatures(
   layerData,
   sourceSpatialReference,
@@ -116,6 +115,7 @@ function reprojectLayerFeatures(
   return { ...layerData, features: reprojectedFeatures };
 }
 
+//* reprojectAllLayers
 export async function reprojectAllLayers(
   rawLayers,
   targetMetricWkid,
@@ -213,6 +213,7 @@ export function buildGeomMetric(
   targetMetricWkid,
   Polygon,
   Polyline,
+
   Point,
 ) {
   return convertGeoJsonToGeometry(
