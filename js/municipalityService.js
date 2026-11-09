@@ -9,11 +9,7 @@ export async function municipalityService(code, FeatureLayer) {
 
   const result = await layer.queryFeatures({
     where: `MUNICIPALITYUNIQUECODE = '${code}'`,
-    outFields: [
-      "MUNICIPALITYARNAME",
-      "AMANA",
-      "ZONE",
-    ],
+    outFields: ["MUNICIPALITYARNAME", "AMANA", "ZONE"],
     returnGeometry: true,
   });
 
@@ -24,6 +20,7 @@ export async function municipalityService(code, FeatureLayer) {
   const zone = zoneWkid ? { number: zoneWkid - 32600, wkid: zoneWkid } : null;
 
   return {
+    type: "municipality",
     code,
     name: attrs.MUNICIPALITYARNAME + " - " + attrs.AMANA ?? "",
     polygon: feature.geometry,

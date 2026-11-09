@@ -135,6 +135,10 @@ export async function reprojectAllLayers(
   const geographicLayers = [];
   const metricLayers = [];
 
+  // console.group(
+  //   "=== بدء عملية إعادة إسقاط الطبقات (Reprojection of Layers) ===",
+  // );
+
   for (const layer of rawLayers) {
     const firstGeometry = layer.features?.find(
       (feature) => feature.geometry,
@@ -147,6 +151,16 @@ export async function reprojectAllLayers(
     const sourceSpatialReference = coordinateSystem.wkid
       ? new SpatialReference({ wkid: coordinateSystem.wkid })
       : new SpatialReference({ wkt: layer.prj ?? "" });
+
+    // const layerName =
+    //   layer.name ||
+    //   layer.fileName ||
+    //   layer.layerName ||
+    //   `طبقة رقم ${index + 1}`;
+    // console.log(`اسم الطبقة (Layer): ${layerName}`);
+    // console.log(
+    //   ` -> نظام الإحداثيات الخام (Input Spatial Reference): Kind = ${coordinateSystem.kind}, WKID/WKT = ${coordinateSystem.wkid || "Custom PRJ"}`,
+    // );
 
     let geographicLayer, metricLayer;
 
@@ -161,6 +175,12 @@ export async function reprojectAllLayers(
         Polyline,
         Point,
       );
+      // console.log(
+      //   `   -> تم توليد النسخة الجغرافية (Original Geographic) والنسخة المترية بـ Zone WKID: ${targetMetricWkid}`,
+      // );
+      // console.log(
+      //   "---------------------------------------------------------------",
+      // );
     } else if (coordinateSystem.wkid === targetMetricWkid) {
       metricLayer = layer;
       geographicLayer = reprojectLayerFeatures(
@@ -172,6 +192,12 @@ export async function reprojectAllLayers(
         Polyline,
         Point,
       );
+      // console.log(
+      //   `   -> تم توليد النسخة المترية (Original Metric) والنسخة الجغرافية بنظام WGS84 (4326)`,
+      // );
+      // console.log(
+      //   "---------------------------------------------------------------",
+      // );
     } else {
       geographicLayer = reprojectLayerFeatures(
         layer,
@@ -191,13 +217,18 @@ export async function reprojectAllLayers(
         Polyline,
         Point,
       );
+      // console.log(
+      //   `   -> تم إعادة إسقاط الطبقة من نظام مصدر مختلف إلى (Geographic 4326) و (Metric WKID: ${targetMetricWkid})`,
+      // );
+      // console.log(
+      //   "---------------------------------------------------------------",
+      // );
     }
     geographicLayers.push(geographicLayer);
     metricLayers.push(metricLayer);
   }
   return { geoLayers: geographicLayers, metricLayers: metricLayers };
 }
-
 export function buildGeomGeo(geoJsonGeometry, Polygon, Polyline, Point) {
   return convertGeoJsonToGeometry(
     geoJsonGeometry,

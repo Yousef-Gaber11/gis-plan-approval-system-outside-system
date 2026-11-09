@@ -5,7 +5,7 @@ import {
   buildGeomMetric,
 } from "./projectionManager.js";
 import {
-  checkMunicipalityBoundary,
+  checkContextBoundary,
   calculateProjectedArea,
 } from "./spatialValidation.js";
 
@@ -19,9 +19,11 @@ export async function processPlanValidation(
   Point,
 ) {
   const zone = municipalityContext.zone;
+  const contextType = municipalityContext.type || "municipality";
+
   if (!zone?.wkid) {
     throw new Error(
-      "بيانات البلدية لا تحتوي على نطاق إحداثيات متري (ZONE) صالح من السيرفر.",
+      "بيانات النطاق الأساسي لا تحتوي على نطاق إحداثيات متري (ZONE) صالح من السيرفر.",
     );
   }
 
@@ -35,36 +37,73 @@ export async function processPlanValidation(
     Point,
   );
 
-  const surveyLayerGeo = findLayer(geoLayers, "SurveyS");
-  if (!surveyLayerGeo?.features?.[0]?.geometry) {
-    throw new Error("لم يتم العثور على طبقة SurveyS في الملف المرفوع.");
+  const BOUNDARY_NAMES = ["surveys", "approvedboundry", "parcelspolygons"];
+  let surveyLayerGeo = null;
+  for (const name of BOUNDARY_NAMES) {
+    const found = findLayer(geoLayers, name);
+    if (found?.features?.some((f) => f.geometry)) {
+      surveyLayerGeo = found;
+      break;
+    }
   }
+  const hasBoundaryInZip = !!surveyLayerGeo;
 
-  // * check municipality boundary
+  if (!surveyLayerGeo) {
+    surveyLayerGeo = geoLayers.find((l) =>
+      l.features?.some(
+        (f) =>
+          f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon",
+      ),
+    );
+  }
+  if (!surveyLayerGeo) {
+    throw new Error("الشيب فايل المرفوع لا يحتوي على أي طبقات صالحة للفحص!");
+  }
+  const validFeatureGeo = surveyLayerGeo.features.find((f) => f.geometry);
+
   const surveyGeomGeo = buildGeomGeo(
-    surveyLayerGeo.features[0].geometry,
+    validFeatureGeo.geometry,
     Polygon,
     Polyline,
     Point,
   );
-  const boundsCheck = checkMunicipalityBoundary(
+  const boundsCheck = checkContextBoundary(
     surveyGeomGeo,
     municipalityContext.polygon,
+    contextType,
   );
   if (boundsCheck.status === "outside") {
-    return { isValid: false, boundsCheck, zone, geoLayers, metricLayers };
+    return {
+      isValid: false,
+      boundsCheck,
+      zone,
+      geoLayers,
+      metricLayers,
+      hasBoundaryInZip,
+    };
   }
 
-  //* detect municipality zone and calculate projected area
-  const surveyMetric = findLayer(metricLayers, "SurveyS");
-  const surveyGeomMetric = buildGeomMetric(
-    surveyMetric.features[0].geometry,
-    zone.wkid,
-    Polygon,
-    Polyline,
-    Point,
-  );
-  const projectedArea = Math.abs(calculateProjectedArea(surveyGeomMetric));
+  //^ area
+  let projectedArea = 0;
+  if (hasBoundaryInZip) {
+    const surveyMetric = metricLayers.find(
+      (l) => l.fileName === surveyLayerGeo.fileName,
+    );
+    const validFeatureMetric = surveyMetric.features.find((f) => f.geometry);
+    const surveyGeomMetric = buildGeomMetric(
+      validFeatureMetric.geometry,
+      zone.wkid,
+      Polygon,
+      Polyline,
+      Point,
+    );
+    projectedArea = Math.abs(calculateProjectedArea(surveyGeomMetric));
+  } else {
+    const contextGeomMetric = projection.project(municipalityContext.polygon, {
+      wkid: zone.wkid,
+    });
+    projectedArea = Math.abs(calculateProjectedArea(contextGeomMetric));
+  }
 
   return {
     isValid: true,
@@ -73,5 +112,6 @@ export async function processPlanValidation(
     projectedArea,
     geoLayers,
     metricLayers,
+    hasBoundaryInZip,
   };
 }
