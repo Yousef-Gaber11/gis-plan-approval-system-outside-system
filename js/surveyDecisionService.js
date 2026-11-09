@@ -15,7 +15,7 @@ export async function surveyDecisionService(
   const whereClause = `KROKINO = '43013394328' and KROKITYPE='7018' and ISAPPROVED = 1`; //KROKINO= '43013394328','${krokino}'
   const decisionResult = await decisionLayer.queryFeatures({
     where: whereClause,
-    // outFields: ["KROKINO", "LICENSEID"],
+    outFields: ["KROKINO", "LANDAREA"],
     returnGeometry: true,
     // outSpatialReference: { wkid: 4326 },
   });
@@ -42,6 +42,7 @@ export async function surveyDecisionService(
     type: "decision",
     code: krokino,
     name: `القرار المساحي: ${krokino}`,
+    landArea: decisionFeature.attributes.LANDAREA || 0,
     polygon: decisionPolygon,
     zone: {
       number: zoneResult.number,

@@ -11,15 +11,15 @@ import {
 
 export async function processPlanValidation(
   rawLayers,
-  municipalityContext,
+  activeContext,
   SpatialReference,
   projection,
   Polygon,
   Polyline,
   Point,
 ) {
-  const zone = municipalityContext.zone;
-  const contextType = municipalityContext.type || "municipality";
+  const zone = activeContext.zone;
+  const contextType = activeContext.type || "municipality";
 
   if (!zone?.wkid) {
     throw new Error(
@@ -37,73 +37,143 @@ export async function processPlanValidation(
     Point,
   );
 
-  const BOUNDARY_NAMES = ["surveys", "approvedboundry", "parcelspolygons"];
-  let surveyLayerGeo = null;
-  for (const name of BOUNDARY_NAMES) {
-    const found = findLayer(geoLayers, name);
-    if (found?.features?.some((f) => f.geometry)) {
-      surveyLayerGeo = found;
-      break;
-    }
-  }
-  const hasBoundaryInZip = !!surveyLayerGeo;
-
-  if (!surveyLayerGeo) {
-    surveyLayerGeo = geoLayers.find((l) =>
-      l.features?.some(
-        (f) =>
-          f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon",
-      ),
+  //* ==============
+  //* (Decision Path
+  //* ==============
+  if (contextType === "decision") {
+    console.log(
+      "%c=== تقرير فحص طبقات الشيب فايل مع القرار المساحي ===",
+      "color: #0088cc; font-weight: bold; font-size: 13px;",
     );
+
+    let globalHasInside = false;
+    let globalHasOutsideOrPartial = false;
+
+    for (const layer of geoLayers) {
+      if (!layer.features) continue;
+
+      let layerInsideCount = 0;
+      let layerOutsideOrPartialCount = 0;
+
+      for (const feature of layer.features) {
+        if (!feature.geometry) continue;
+
+        const featGeom = buildGeomGeo(
+          feature.geometry,
+          Polygon,
+          Polyline,
+          Point,
+        );
+        const statusCheck = checkContextBoundary(
+          featGeom,
+          activeContext.polygon,
+          "decision",
+        );
+
+        if (statusCheck.status === "inside") {
+          layerInsideCount++;
+          globalHasInside = true;
+        } else {
+          layerOutsideOrPartialCount++;
+          globalHasOutsideOrPartial = true;
+        }
+      }
+
+      if (layerInsideCount > 0 && layerOutsideOrPartialCount === 0) {
+        console.log(
+          `%c[Layer] ${layer.fileName}: بالكامل داخل القرار المساحي (عناصر: ${layerInsideCount})`,
+          "color: green;",
+        );
+      } else if (layerInsideCount === 0 && layerOutsideOrPartialCount > 0) {
+        console.log(
+          `%c[Layer] ${layer.fileName}: بالكامل خارج القرار المساحي (عناصر: ${layerOutsideOrPartialCount})`,
+          "color: red;",
+        );
+      } else if (layerInsideCount > 0 && layerOutsideOrPartialCount > 0) {
+        console.log(
+          `%c[Layer] ${layer.fileName}: متقاطعة جزئيا (بالداخل: ${layerInsideCount}, بالخارج: ${layerOutsideOrPartialCount})`,
+          "color: orange;",
+        );
+      } else {
+        console.log(
+          `[Layer] ${layer.fileName}: لا تحتوي على عناصر صالحة للفحص.`,
+        );
+      }
+    }
+
+    let finalStatus = "";
+    let finalMessage = "";
+    let isValid = true;
+
+    if (!globalHasInside) {
+      finalStatus = "outside";
+      finalMessage =
+        "جميع طبقات المخطط تقع بالكامل خارج القرار المساحي المعتمد";
+      isValid = false;
+    } else if (globalHasOutsideOrPartial) {
+      finalStatus = "partial";
+      finalMessage =
+        "المخطط متقاطع أو يقع جزئيا خارج حدود القرار المساحي";
+      isValid = true;
+    } else {
+      finalStatus = "inside";
+      finalMessage = "جميع طبقات المخطط تقع بالكامل داخل حدود القرار المساحي";
+      isValid = true;
+    }
+
+    const boundsCheck = { status: finalStatus, message: finalMessage };
+
+    if (!isValid) {
+      return { isValid: false, boundsCheck, zone, geoLayers, metricLayers };
+    }
+
+    const projectedArea =
+      activeContext.landArea || activeContext.attributes?.LANDAREA || 0;
+
+    return {
+      isValid: true,
+      boundsCheck,
+      zone,
+      projectedArea,
+      geoLayers,
+      metricLayers,
+    };
   }
-  if (!surveyLayerGeo) {
-    throw new Error("الشيب فايل المرفوع لا يحتوي على أي طبقات صالحة للفحص!");
+
+  //* ====================
+  //* (Municipality Path)
+  //* =================
+  const surveyLayerGeo = findLayer(geoLayers, "SurveyS");
+  if (!surveyLayerGeo?.features?.[0]?.geometry) {
+    throw new Error("لم يتم العثور على طبقة SurveyS في الملف المرفوع.");
   }
-  const validFeatureGeo = surveyLayerGeo.features.find((f) => f.geometry);
 
   const surveyGeomGeo = buildGeomGeo(
-    validFeatureGeo.geometry,
+    surveyLayerGeo.features[0].geometry,
     Polygon,
     Polyline,
     Point,
   );
+
   const boundsCheck = checkContextBoundary(
     surveyGeomGeo,
-    municipalityContext.polygon,
-    contextType,
+    activeContext.polygon,
+    "municipality",
   );
+
   if (boundsCheck.status === "outside") {
-    return {
-      isValid: false,
-      boundsCheck,
-      zone,
-      geoLayers,
-      metricLayers,
-      hasBoundaryInZip,
-    };
+    return { isValid: false, boundsCheck, zone, geoLayers, metricLayers };
   }
 
-  //^ area
-  let projectedArea = 0;
-  if (hasBoundaryInZip) {
-    const surveyMetric = metricLayers.find(
-      (l) => l.fileName === surveyLayerGeo.fileName,
-    );
-    const validFeatureMetric = surveyMetric.features.find((f) => f.geometry);
-    const surveyGeomMetric = buildGeomMetric(
-      validFeatureMetric.geometry,
-      zone.wkid,
-      Polygon,
-      Polyline,
-      Point,
-    );
-    projectedArea = Math.abs(calculateProjectedArea(surveyGeomMetric));
-  } else {
-    const contextGeomMetric = projection.project(municipalityContext.polygon, {
-      wkid: zone.wkid,
-    });
-    projectedArea = Math.abs(calculateProjectedArea(contextGeomMetric));
-  }
+  const surveyMetric = findLayer(metricLayers, "SurveyS");
+  const surveyGeomMetric = buildGeomMetric(
+    surveyMetric.features[0].geometry,
+    zone.wkid,
+    Polygon,
+    Polyline,
+    Point,
+  );
+  const projectedArea = Math.abs(calculateProjectedArea(surveyGeomMetric));
 
   return {
     isValid: true,
@@ -112,6 +182,5 @@ export async function processPlanValidation(
     projectedArea,
     geoLayers,
     metricLayers,
-    hasBoundaryInZip,
   };
 }

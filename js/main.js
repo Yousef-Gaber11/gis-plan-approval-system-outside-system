@@ -167,7 +167,6 @@ require([
         zone,
         projectedArea,
         geoLayers,
-        hasBoundaryInZip,
       } = validationResult;
 
       if (!isValid) {
@@ -187,14 +186,6 @@ require([
         zone,
         projectedArea,
       );
-
-      if (!hasBoundaryInZip) {
-        validationViewer.innerHTML += `
-          <div style="margin-top: 10px; padding: 8px; background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; border-radius: 4px; font-size: 13px;">
-            <strong>تنبيه:</strong> لم يتم العثور على طبقة الحدود (SurveyS أو ApprovedBoundry) في المخطط المرفوع. تم رسم الطبقات المتاحة والاعتماد على مساحة النطاق الأساسي.
-          </div>
-        `;
-      }
 
       // ^ calculate statistics
       const statistics = calcStatistics(geoLayers, projectedArea);
