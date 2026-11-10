@@ -1,79 +1,20 @@
-//* extractFirstXCoordinate
-function extractFirstXCoordinate(geoJsonGeometry) {
-  const coordinates = geoJsonGeometry.coordinates;
-  const geometryType = geoJsonGeometry.type;
+//* checkGeographic
+function checkGeographic(geometry) {
+  if (!geometry) return false;
 
-  if (geometryType === "Point") return coordinates[0];
-  if (geometryType === "LineString" || geometryType === "MultiPoint")
-    return coordinates[0]?.[0];
-  if (geometryType === "Polygon" || geometryType === "MultiLineString")
-    return coordinates[0]?.[0]?.[0];
-  if (geometryType === "MultiPolygon") return coordinates[0]?.[0]?.[0]?.[0];
+  let point = geometry.coordinates
+    ? Array.isArray(geometry.coordinates[0][0])
+      ? geometry.coordinates[0][0]
+      : geometry.coordinates[0]
+    : geometry;
 
-  return null;
-}
-//* iidentifyCoordinateSystem
-export function identifyCoordinateSystem(sampleXCoordinate) {
-  const isLargeCoordinate =
-    sampleXCoordinate != null && Math.abs(sampleXCoordinate) > 180;
-  return {
-    kind: isLargeCoordinate ? "projected" : "geographic",
-    wkid: isLargeCoordinate ? null : 4326,
-    assumed: true,
-  };
+  return point && point[0] != null
+    ? Math.abs(point[0]).toString().split(".")[0].length <= 2
+    : false;
 }
 
-//* convertGeoJsonToGeometry
-function convertGeoJsonToGeometry(
-  geoJsonGeometry,
-  spatialReference,
-  Polygon,
-  Polyline,
-  Point,
-) {
-  const { type: geometryType, coordinates } = geoJsonGeometry;
-  if (geometryType === "Point") {
-    return new Point({
-      x: coordinates[0],
-      y: coordinates[1],
-      spatialReference,
-    });
-  }
-  if (geometryType === "LineString") {
-    return new Polyline({ paths: [coordinates], spatialReference });
-  }
-  if (geometryType === "MultiLineString") {
-    return new Polyline({ paths: coordinates, spatialReference });
-  }
-  if (geometryType === "Polygon") {
-    return new Polygon({
-      rings: coordinates,
-      spatialReference,
-    });
-  }
-  if (geometryType === "MultiPolygon") {
-    return new Polygon({
-      rings: coordinates.flat(1),
-      spatialReference,
-    });
-  }
-  return null;
-}
-
-//* convertGeometryToGeoJsonCoords
-function convertGeometryToGeoJsonCoords(projectedGeometry, geometryType) {
-  if (geometryType === "Point")
-    return [projectedGeometry.x, projectedGeometry.y];
-  if (geometryType === "LineString") return projectedGeometry.paths[0];
-  if (geometryType === "MultiLineString") return projectedGeometry.paths;
-  if (geometryType === "Polygon") return projectedGeometry.rings;
-  if (geometryType === "MultiPolygon")
-    return projectedGeometry.rings.map((ring) => [ring]);
-  return null;
-}
-
-//*reprojectLayerFeatures
-function reprojectLayerFeatures(
+//* createAndReprojectLayer
+function createAndReprojectLayer(
   layerData,
   sourceSpatialReference,
   targetSpatialReference,
@@ -82,37 +23,76 @@ function reprojectLayerFeatures(
   Polyline,
   Point,
 ) {
-  const reprojectedFeatures = layerData.features.map((feature) => {
+  const processedFeatures = layerData.features.map((feature) => {
     if (!feature.geometry) return feature;
 
-    const geometry = convertGeoJsonToGeometry(
-      feature.geometry,
-      sourceSpatialReference,
-      Polygon,
-      Polyline,
-      Point,
-    );
-    if (!geometry) return feature;
+    const { type: geoType, coordinates } = feature.geometry;
+    let esriGeometry = null;
 
-    const projectedGeometry = projectionEngine.project(
-      geometry,
-      targetSpatialReference,
-    );
-    if (!projectedGeometry) return feature;
+    try {
+      if (geoType === "Point") {
+        esriGeometry = new Point({
+          x: coordinates[0],
+          y: coordinates[1],
+          spatialReference: sourceSpatialReference,
+        });
+      } else if (geoType === "LineString") {
+        esriGeometry = new Polyline({
+          paths: [coordinates],
+          spatialReference: sourceSpatialReference,
+        });
+      } else if (geoType === "MultiLineString") {
+        esriGeometry = new Polyline({
+          paths: coordinates,
+          spatialReference: sourceSpatialReference,
+        });
+      } else if (geoType === "Polygon") {
+        esriGeometry = new Polygon({
+          rings: coordinates,
+          spatialReference: sourceSpatialReference,
+        });
+      } else if (geoType === "MultiPolygon") {
+        esriGeometry = new Polygon({
+          rings: coordinates.flat(1),
+          spatialReference: sourceSpatialReference,
+        });
+      }
+    } catch (err) {
+      console.warn("خطأ في بناء الشكل الهندسي:", err);
+      return feature;
+    }
 
-    const newGeoJsonCoords = convertGeometryToGeoJsonCoords(
-      projectedGeometry,
-      feature.geometry.type,
-    );
-    if (!newGeoJsonCoords) return feature;
+    if (!esriGeometry) return feature;
 
-    return {
+    let finalGeometry = esriGeometry;
+    if (sourceSpatialReference.wkid !== targetSpatialReference.wkid) {
+      finalGeometry = projectionEngine.project(
+        esriGeometry,
+        targetSpatialReference,
+      );
+    }
+
+    let newCoords;
+    if (geoType === "Point") newCoords = [finalGeometry.x, finalGeometry.y];
+    else if (geoType === "LineString") newCoords = finalGeometry.paths[0];
+    else if (geoType === "MultiLineString") newCoords = finalGeometry.paths;
+    else if (geoType === "Polygon") newCoords = finalGeometry.rings;
+    else if (geoType === "MultiPolygon")
+      newCoords = finalGeometry.rings.map((r) => [r]);
+
+    const newFeature = {
       ...feature,
-      geometry: { ...feature.geometry, coordinates: newGeoJsonCoords },
+      geometry: { type: geoType, coordinates: newCoords },
     };
+
+    Object.defineProperty(newFeature, "esriGeometry", {
+      value: finalGeometry,
+    });
+
+    return newFeature;
   });
 
-  return { ...layerData, features: reprojectedFeatures };
+  return { ...layerData, features: processedFeatures };
 }
 
 //* reprojectAllLayers
@@ -135,122 +115,41 @@ export async function reprojectAllLayers(
   const geographicLayers = [];
   const metricLayers = [];
 
-  // console.group(
-  //   "=== بدء عملية إعادة إسقاط الطبقات (Reprojection of Layers) ===",
-  // );
-
   for (const layer of rawLayers) {
     const firstGeometry = layer.features?.find(
       (feature) => feature.geometry,
     )?.geometry;
-    const sampleXCoordinate = firstGeometry
-      ? extractFirstXCoordinate(firstGeometry)
-      : null;
-    const coordinateSystem = identifyCoordinateSystem(sampleXCoordinate);
 
-    const sourceSpatialReference = coordinateSystem.wkid
-      ? new SpatialReference({ wkid: coordinateSystem.wkid })
+    const isGeographic = checkGeographic(firstGeometry);
+    const sourceWkid = isGeographic ? 4326 : null;
+
+    const sourceSpatialReference = sourceWkid
+      ? new SpatialReference({ wkid: sourceWkid })
       : new SpatialReference({ wkt: layer.prj ?? "" });
 
-    // const layerName =
-    //   layer.name ||
-    //   layer.fileName ||
-    //   layer.layerName ||
-    //   `طبقة رقم ${index + 1}`;
-    // console.log(`اسم الطبقة (Layer): ${layerName}`);
-    // console.log(
-    //   ` -> نظام الإحداثيات الخام (Input Spatial Reference): Kind = ${coordinateSystem.kind}, WKID/WKT = ${coordinateSystem.wkid || "Custom PRJ"}`,
-    // );
+    const geographicLayer = createAndReprojectLayer(
+      layer,
+      sourceSpatialReference,
+      wgs84SpatialReference,
+      projectionEngine,
+      Polygon,
+      Polyline,
+      Point,
+    );
 
-    let geographicLayer, metricLayer;
+    const metricLayer = createAndReprojectLayer(
+      layer,
+      sourceSpatialReference,
+      targetMetricSpatialReference,
+      projectionEngine,
+      Polygon,
+      Polyline,
+      Point,
+    );
 
-    if (coordinateSystem.kind === "geographic") {
-      geographicLayer = layer;
-      metricLayer = reprojectLayerFeatures(
-        layer,
-        sourceSpatialReference,
-        targetMetricSpatialReference,
-        projectionEngine,
-        Polygon,
-        Polyline,
-        Point,
-      );
-      // console.log(
-      //   `   -> تم توليد النسخة الجغرافية (Original Geographic) والنسخة المترية بـ Zone WKID: ${targetMetricWkid}`,
-      // );
-      // console.log(
-      //   "---------------------------------------------------------------",
-      // );
-    } else if (coordinateSystem.wkid === targetMetricWkid) {
-      metricLayer = layer;
-      geographicLayer = reprojectLayerFeatures(
-        layer,
-        sourceSpatialReference,
-        wgs84SpatialReference,
-        projectionEngine,
-        Polygon,
-        Polyline,
-        Point,
-      );
-      // console.log(
-      //   `   -> تم توليد النسخة المترية (Original Metric) والنسخة الجغرافية بنظام WGS84 (4326)`,
-      // );
-      // console.log(
-      //   "---------------------------------------------------------------",
-      // );
-    } else {
-      geographicLayer = reprojectLayerFeatures(
-        layer,
-        sourceSpatialReference,
-        wgs84SpatialReference,
-        projectionEngine,
-        Polygon,
-        Polyline,
-        Point,
-      );
-      metricLayer = reprojectLayerFeatures(
-        geographicLayer,
-        wgs84SpatialReference,
-        targetMetricSpatialReference,
-        projectionEngine,
-        Polygon,
-        Polyline,
-        Point,
-      );
-      // console.log(
-      //   `   -> تم إعادة إسقاط الطبقة من نظام مصدر مختلف إلى (Geographic 4326) و (Metric WKID: ${targetMetricWkid})`,
-      // );
-      // console.log(
-      //   "---------------------------------------------------------------",
-      // );
-    }
     geographicLayers.push(geographicLayer);
     metricLayers.push(metricLayer);
   }
-  return { geoLayers: geographicLayers, metricLayers: metricLayers };
-}
-export function buildGeomGeo(geoJsonGeometry, Polygon, Polyline, Point) {
-  return convertGeoJsonToGeometry(
-    geoJsonGeometry,
-    { wkid: 4326 },
-    Polygon,
-    Polyline,
-    Point,
-  );
-}
 
-export function buildGeomMetric(
-  geoJsonGeometry,
-  targetMetricWkid,
-  Polygon,
-  Polyline,
-  Point,
-) {
-  return convertGeoJsonToGeometry(
-    geoJsonGeometry,
-    { wkid: targetMetricWkid },
-    Polygon,
-    Polyline,
-    Point,
-  );
+  return { geoLayers: geographicLayers, metricLayers: metricLayers };
 }

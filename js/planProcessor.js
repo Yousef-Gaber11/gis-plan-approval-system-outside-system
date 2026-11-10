@@ -1,9 +1,5 @@
 import { findLayer } from "./helperFun.js";
-import {
-  reprojectAllLayers,
-  buildGeomGeo,
-  buildGeomMetric,
-} from "./projectionManager.js";
+import { reprojectAllLayers } from "./projectionManager.js";
 import {
   checkContextBoundary,
   calculateProjectedArea,
@@ -56,16 +52,10 @@ export async function processPlanValidation(
       let layerOutsideCount = 0;
 
       for (const feature of layer.features) {
-        if (!feature.geometry) continue;
+        if (!feature.esriGeometry) continue;
 
-        const featGeom = buildGeomGeo(
-          feature.geometry,
-          Polygon,
-          Polyline,
-          Point,
-        );
         const statusCheck = checkContextBoundary(
-          featGeom,
+          feature.esriGeometry,
           activeContext.polygon,
           "decision",
         );
@@ -151,19 +141,12 @@ export async function processPlanValidation(
   //* (Municipality Path)
   //* =================
   const surveyLayerGeo = findLayer(geoLayers, "SurveyS");
-  if (!surveyLayerGeo?.features?.[0]?.geometry) {
+  if (!surveyLayerGeo?.features?.[0]?.esriGeometry) {
     throw new Error("لم يتم العثور على طبقة SurveyS في الملف المرفوع.");
   }
 
-  const surveyGeomGeo = buildGeomGeo(
-    surveyLayerGeo.features[0].geometry,
-    Polygon,
-    Polyline,
-    Point,
-  );
-
   const boundsCheck = checkContextBoundary(
-    surveyGeomGeo,
+    surveyLayerGeo.features[0].esriGeometry,
     activeContext.polygon,
     "municipality",
   );
@@ -173,14 +156,9 @@ export async function processPlanValidation(
   }
 
   const surveyMetric = findLayer(metricLayers, "SurveyS");
-  const surveyGeomMetric = buildGeomMetric(
-    surveyMetric.features[0].geometry,
-    zone.wkid,
-    Polygon,
-    Polyline,
-    Point,
+  const projectedArea = Math.abs(
+    calculateProjectedArea(surveyMetric.features[0].esriGeometry),
   );
-  const projectedArea = Math.abs(calculateProjectedArea(surveyGeomMetric));
 
   return {
     isValid: true,
