@@ -93,19 +93,21 @@ require([
     try {
       let result;
       if (radioMuni.checked) {
-        //^ Municipality path
+        validationViewer.textContent =
+          "جاري الاتصال بالسيرفر لجلب نطاق البلدية...";
+        //* Municipality Path
         result = await municipalityManager(
           view,
           GraphicsLayer,
           Graphic,
           FeatureLayer,
-          validationViewer,
         );
       } else {
-        //^ Survey Decision path
         const krokino = inputKrokino.value.trim();
-        if (!krokino) throw new Error("يرجى إدخال رقم القرار المساحي أولاً.");
-
+        if (!krokino) throw new Error("يرجى إدخال رقم القرار المساحي اولا");
+        validationViewer.textContent =
+          "جاري الاتصال بالسيرفر لجلب القرار المساحي واستنتاج الزون...";
+        //* Survey Decision Path
         result = await surveyDecisionManager(
           krokino,
           view,
@@ -113,22 +115,25 @@ require([
           Graphic,
           FeatureLayer,
           geometryEngine,
-          validationViewer,
           Polygon,
         );
       }
 
       activeContext = result.context;
       activeLayer = result.layer;
+
       if (activeContext) {
         uploadSectionDiv.classList.remove("disabled");
         fileInput.disabled = false;
+
+        const zoneMsg = activeContext.zone
+          ? ` - النطاق: <b>Zone ${activeContext.zone.number}</b>`
+          : "";
+        validationViewer.innerHTML = `<span style="color:green;">تم تحميل (${activeContext.name})${zoneMsg} - في انتظار رفع المخطط...</span>`;
       }
     } catch (err) {
       console.error(err);
-      if (validationViewer) {
-        validationViewer.innerHTML = `<span style="color:red;">خطأ: ${err.message}</span>`;
-      }
+      validationViewer.innerHTML = `<span style="color:red;">خطأ: ${err.message}</span>`;
     }
   });
 
@@ -161,13 +166,8 @@ require([
         Point,
       );
 
-      const {
-        isValid,
-        boundsCheck,
-        zone,
-        projectedArea,
-        geoLayers,
-      } = validationResult;
+      const { isValid, boundsCheck, zone, projectedArea, geoLayers } =
+        validationResult;
 
       if (!isValid) {
         setInvalidPlanState(
