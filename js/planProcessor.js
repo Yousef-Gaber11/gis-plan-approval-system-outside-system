@@ -38,7 +38,7 @@ export async function processPlanValidation(
   );
 
   //* ==============
-  //* (Decision Path
+  //* Decision Path
   //* ==============
   if (contextType === "decision") {
     console.log(
@@ -46,14 +46,14 @@ export async function processPlanValidation(
       "color: #0088cc; font-weight: bold; font-size: 13px;",
     );
 
-    let globalHasInside = false;
-    let globalHasOutsideOrPartial = false;
+    let globalHasInsideOrPartial = false;
+    let globalHasOutside = false;
 
     for (const layer of geoLayers) {
       if (!layer.features) continue;
 
-      let layerInsideCount = 0;
-      let layerOutsideOrPartialCount = 0;
+      let layerInsideOrPartialCount = 0;
+      let layerOutsideCount = 0;
 
       for (const feature of layer.features) {
         if (!feature.geometry) continue;
@@ -70,28 +70,31 @@ export async function processPlanValidation(
           "decision",
         );
 
-        if (statusCheck.status === "inside") {
-          layerInsideCount++;
-          globalHasInside = true;
+        const isInsideOrPartial =
+          statusCheck.status === "inside" || statusCheck.status === "partial";
+
+        if (isInsideOrPartial) {
+          layerInsideOrPartialCount++;
+          globalHasInsideOrPartial = true;
         } else {
-          layerOutsideOrPartialCount++;
-          globalHasOutsideOrPartial = true;
+          layerOutsideCount++;
+          globalHasOutside = true;
         }
       }
 
-      if (layerInsideCount > 0 && layerOutsideOrPartialCount === 0) {
+      if (layerInsideOrPartialCount > 0 && layerOutsideCount === 0) {
         console.log(
-          `%c[Layer] ${layer.fileName}: بالكامل داخل القرار المساحي (عناصر: ${layerInsideCount})`,
+          `%c${layer.fileName}: داخل القرار (${layerInsideOrPartialCount})`,
           "color: green;",
         );
-      } else if (layerInsideCount === 0 && layerOutsideOrPartialCount > 0) {
+      } else if (layerInsideOrPartialCount === 0 && layerOutsideCount > 0) {
         console.log(
-          `%c[Layer] ${layer.fileName}: بالكامل خارج القرار المساحي (عناصر: ${layerOutsideOrPartialCount})`,
+          `%c${layer.fileName}: خارج القرار! (${layerOutsideCount})`,
           "color: red;",
         );
-      } else if (layerInsideCount > 0 && layerOutsideOrPartialCount > 0) {
+      } else if (layerInsideOrPartialCount > 0 && layerOutsideCount > 0) {
         console.log(
-          `%c[Layer] ${layer.fileName}: متقاطعة جزئيا (بالداخل: ${layerInsideCount}, بالخارج: ${layerOutsideOrPartialCount})`,
+          `%c${layer.fileName}: جزئي (جوه: ${layerInsideOrPartialCount}, بره: ${layerOutsideCount})`,
           "color: orange;",
         );
       } else {
@@ -100,24 +103,28 @@ export async function processPlanValidation(
         );
       }
     }
+    if (globalHasOutside) {
+      console.log(
+        "%cالمخطط يحتوي على بعض العناصر التي تقع خارج حدود القرار :[Summary]",
+        "color: orange; font-weight: bold;",
+      );
+    }
 
     let finalStatus = "";
     let finalMessage = "";
     let isValid = true;
 
-    if (!globalHasInside) {
+    if (!globalHasInsideOrPartial) {
       finalStatus = "outside";
-      finalMessage =
-        "جميع طبقات المخطط تقع بالكامل خارج القرار المساحي المعتمد";
+      finalMessage = "جميع طبقات المخطط تقع خارج القرار المساحي";
       isValid = false;
-    } else if (globalHasOutsideOrPartial) {
+    } else if (globalHasOutside) {
       finalStatus = "partial";
-      finalMessage =
-        "المخطط متقاطع أو يقع جزئيا خارج حدود القرار المساحي";
+      finalMessage = "المخطط مقبول لكن بعض الطبقات خارج حدود القرار";
       isValid = true;
     } else {
       finalStatus = "inside";
-      finalMessage = "جميع طبقات المخطط تقع بالكامل داخل حدود القرار المساحي";
+      finalMessage = "جميع طبقات المخطط داخل حدود القرار المساحي";
       isValid = true;
     }
 
