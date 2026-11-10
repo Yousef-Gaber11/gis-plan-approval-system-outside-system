@@ -3,10 +3,16 @@ export function setLoadingState(jsonViewer, validationViewer) {
   validationViewer.textContent = "جاري الفحص المكاني...";
 }
 
-export function setInvalidPlanState(validationViewer, jsonViewer, message) {
+export function setInvalidPlanState(
+  validationViewer,
+  jsonViewer,
+  message,
+  contextType,
+) {
+  const targetName = contextType === "decision" ? "القرار المساحي" : "البلدية";
   validationViewer.innerHTML = `
     <div style="margin-bottom: 8px; color:red; font-weight:bold;">${message}</div>
-    <div style="color: gray;">تم إيقاف عملية الرسم والمعالجة لأن المخطط يقع خارج نطاق البلدية المعتمد.</div>
+    <div style="color: gray;">تم إيقاف عملية الرسم والمعالجة لأن المخطط يقع خارج نطاق ${targetName} المعتمد.</div>
   `;
   jsonViewer.textContent = "تم إلغاء عرض البيانات (المخطط خارج النطاق).";
 }
@@ -28,12 +34,11 @@ export function setValidPlanState(
         <span style="color:blue;" dir="ltr">Zone ${zone.number} (WKID: ${zone.wkid})</span>
       </div>
       <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
-        <strong>مساحة القرار هندسياً (م²):</strong> 
+        <strong>مساحة النطاق هندسياً (م²):</strong> 
         <span style="color:green; font-weight:bold; font-size:15px;" dir="ltr">
           ${projectedArea.toLocaleString("en-US", { maximumFractionDigits: 2 })}
         </span>
       </div>
-
     </div>
   `;
 }

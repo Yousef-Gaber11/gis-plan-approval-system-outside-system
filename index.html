@@ -20,12 +20,37 @@
     <div id="sidebar">
         <h2>اعتماد المخطط</h2>
 
-        <div class="upload-section">
-            <label for="shpFileInput" class="custom-file-upload">اختيار ملف المخطط (.zip)</label>
-            <input type="file" id="shpFileInput" accept=".zip" />
+        <div class="context-panel">
+            <h4>1. تحديد النطاق الأساسي</h4>
+
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="pathType" id="radioMuni" checked> حدود بلدية
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="pathType" id="radioDecision"> قرار مساحي
+                </label>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="inputMuniCode" class="context-input" value="011001001"
+                    placeholder="أدخل كود البلدية">
+
+                <input type="text" id="inputKrokino" class="context-input" value="43013394328"
+                    placeholder="أدخل رقم الكروكي" style="display: none;">
+
+                <button id="fetchContextBtn">جلب ورسم</button>
+            </div>
         </div>
 
-        <hr />
+        <div class="upload-section disabled" id="uploadSectionDiv">
+            <h4>2. مطابقة المخطط (Shapefile)</h4>
+            <label for="shpFileInput" class="custom-file-upload" id="uploadLabel">اختيار ملف المخطط (.zip)</label>
+            <input type="file" id="shpFileInput" accept=".zip" disabled />
+            <small class="upload-note">سيتم تفعيل الرفع بعد جلب النطاق بنجاح</small>
+        </div>
+
+        <hr class="divider" />
 
         <h3>مخرجات الإحصائيات (Statistics JSON)</h3>
         <div id="jsonViewer" dir="ltr">في انتظار رفع ملف المخطط</div>
@@ -35,7 +60,7 @@
         <h3>نتائج التحقق المكاني (الوضع المتري)</h3>
         <div id="validationViewer" dir="ltr"
             style="background-color: #f1f8ff; padding: 15px; border-radius: 6px; border: 1px solid #cce5ff; font-family: Consolas, monospace; font-size: 14px; margin-top: 10px;">
-           في انتظار المعالجة المكانية
+            في انتظار المعالجة المكانية
         </div>
     </div>
 

@@ -11,6 +11,7 @@ import {
   setValidPlanState,
   setErrorState,
 } from "./uiManager.js";
+import { surveyDecisionManager } from "./surveyDecisionManager.js";
 
 require([
   "esri/Map",
@@ -46,7 +47,9 @@ require([
   GraphicsLayer,
 ) {
   initSpatialValidation(geometryEngine);
-  const map = new Map({ basemap: "satellite" });
+  const map = new Map({
+    basemap: "satellite", //"hybrid"
+  });
   const view = new MapView({
     container: "viewDiv",
     map,
@@ -58,44 +61,99 @@ require([
   const fileInput = document.getElementById("shpFileInput");
   const jsonViewer = document.getElementById("jsonViewer");
   const validationViewer = document.getElementById("validationViewer");
+  const uploadSectionDiv = document.getElementById("uploadSectionDiv");
+  const radioMuni = document.getElementById("radioMuni");
+  const radioDecision = document.getElementById("radioDecision");
+  const inputMuniCode = document.getElementById("inputMuniCode");
+  const inputKrokino = document.getElementById("inputKrokino");
+  const fetchContextBtn = document.getElementById("fetchContextBtn");
 
-  //* first step
-  let municipalityContext = null;
-  let muniLayer = null;
-  const muniReady = municipalityManager(
-    view,
-    GraphicsLayer,
-    Graphic,
-    FeatureLayer,
-    validationViewer,
-  ).then((result) => {
-    municipalityContext = result.context;
-    muniLayer = result.layer;
+  radioMuni.addEventListener("change", () => {
+    inputMuniCode.style.display = "block";
+    inputKrokino.style.display = "none";
+  });
+  radioDecision.addEventListener("change", () => {
+    inputMuniCode.style.display = "none";
+    inputKrokino.style.display = "block";
   });
 
-  //* second step
+  //* step 1 --> fetch the context (municipality or survey decision)
+  let activeContext = null;
+  let activeLayer = null;
+
+  fetchContextBtn.addEventListener("click", async () => {
+    if (activeLayer) view.map.layers.remove(activeLayer);
+    activeContext = null;
+    activeLayer = null;
+
+    uploadSectionDiv.classList.add("disabled");
+    fileInput.disabled = true;
+    fileInput.value = "";
+
+    try {
+      let result;
+      if (radioMuni.checked) {
+        //^ Municipality path
+        result = await municipalityManager(
+          view,
+          GraphicsLayer,
+          Graphic,
+          FeatureLayer,
+          validationViewer,
+        );
+      } else {
+        //^ Survey Decision path
+        const krokino = inputKrokino.value.trim();
+        if (!krokino) throw new Error("يرجى إدخال رقم القرار المساحي أولاً.");
+
+        result = await surveyDecisionManager(
+          krokino,
+          view,
+          GraphicsLayer,
+          Graphic,
+          FeatureLayer,
+          geometryEngine,
+          validationViewer,
+          Polygon,
+        );
+      }
+
+      activeContext = result.context;
+      activeLayer = result.layer;
+      if (activeContext) {
+        uploadSectionDiv.classList.remove("disabled");
+        fileInput.disabled = false;
+      }
+    } catch (err) {
+      console.error(err);
+      if (validationViewer) {
+        validationViewer.innerHTML = `<span style="color:red;">خطأ: ${err.message}</span>`;
+      }
+    }
+  });
+
+  //* step 2 --> process the uploaded shapefile
   fileInput.addEventListener("change", async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     setLoadingState(jsonViewer, validationViewer);
-
+    const layersToRemove = [];
     view.map.layers.forEach((layer) => {
-      if (layer !== muniLayer) view.map.layers.remove(layer);
+      if (layer !== activeLayer) layersToRemove.push(layer);
     });
+    view.map.removeMany(layersToRemove);
 
     try {
-      await muniReady;
-      if (!municipalityContext)
+      if (!activeContext)
         throw new Error(
-          "بيانات البلدية غير متاحة للمطابقة. يرجى تحديث الصفحة.",
+          "بيانات النطاق غير متاحة للمطابقة. يرجى جلب النطاق الأساسي",
         );
-
+      //^ read the shapefileApi
       const rawLayers = await shapefileApi(file);
-
+      //^ process the processPlanValidation
       const validationResult = await processPlanValidation(
         rawLayers,
-        municipalityContext,
+        activeContext,
         SpatialReference,
         projection,
         Polygon,
@@ -103,11 +161,21 @@ require([
         Point,
       );
 
-      const { isValid, boundsCheck, zone, projectedArea, geoLayers } =
-        validationResult;
+      const {
+        isValid,
+        boundsCheck,
+        zone,
+        projectedArea,
+        geoLayers,
+      } = validationResult;
 
       if (!isValid) {
-        setInvalidPlanState(validationViewer, jsonViewer, boundsCheck.message);
+        setInvalidPlanState(
+          validationViewer,
+          jsonViewer,
+          boundsCheck.message,
+          activeContext.type,
+        );
         fileInput.value = "";
         return;
       }
@@ -119,10 +187,10 @@ require([
         projectedArea,
       );
 
-      //^ statistics
-      const statistics = calcStatistics(geoLayers);
+      // ^ calculate statistics
+      const statistics = calcStatistics(geoLayers, projectedArea);
       renderJson(statistics, jsonViewer);
-      //^ draw
+      // ^ draw
       await drawLayers(geoLayers, view, GeoJSONLayer);
     } catch (err) {
       console.error(err);

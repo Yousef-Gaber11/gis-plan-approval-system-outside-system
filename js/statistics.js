@@ -1,14 +1,19 @@
 import { getLandUseName, toNum, round2, findLayer } from "./helperFun.js";
 
-export function calcStatistics(layers) {
+export function calcStatistics(layers, fallbackArea = 0) {
   const survey = findLayer(layers, "SurveyS");
   const parcels = findLayer(layers, "ParcelsPolygonS");
   const streets = findLayer(layers, "PlansStreetsPlygonsS");
   const parking = findLayer(layers, "PlansCarParkingS");
   const lakes = findLayer(layers, "PlansLakesS");
 
+  let planArea = toNum(survey?.features?.[0]?.properties?.Area);
+  if (planArea === 0 && fallbackArea > 0) {
+    planArea = fallbackArea;
+  }
+
   const statistics = {
-    planArea: toNum(survey?.features?.[0]?.properties?.Area),
+    planArea: round2(planArea),
     landuseInfo: {},
     parcelsListInfo: [],
     PlansStreetsPlygonsS: { area: 0, areaPercentage: 0 },
