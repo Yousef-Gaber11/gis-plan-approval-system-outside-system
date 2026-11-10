@@ -244,7 +244,6 @@ export function buildGeomMetric(
   targetMetricWkid,
   Polygon,
   Polyline,
-
   Point,
 ) {
   return convertGeoJsonToGeometry(

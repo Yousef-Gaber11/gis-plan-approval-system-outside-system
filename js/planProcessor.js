@@ -105,7 +105,7 @@ export async function processPlanValidation(
     }
     if (globalHasOutside) {
       console.log(
-        "%cالمخطط يحتوي على بعض العناصر التي تقع خارج حدود القرار :[Summary]",
+        "%المخطط يحتوي على بعض العناصر التي تقع خارج حدود القرار :[Summary]",
         "color: orange; font-weight: bold;",
       );
     }
@@ -120,7 +120,7 @@ export async function processPlanValidation(
       isValid = false;
     } else if (globalHasOutside) {
       finalStatus = "partial";
-      finalMessage = "المخطط مقبول لكن بعض الطبقات خارج حدود القرار";
+      finalMessage = "المخطط مقبول لكن بعض عناصر الطبقات خارج حدود القرار";
       isValid = true;
     } else {
       finalStatus = "inside";

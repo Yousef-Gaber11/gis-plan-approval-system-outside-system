@@ -17,7 +17,6 @@ export async function surveyDecisionService(
     where: whereClause,
     outFields: ["KROKINO", "LANDAREA"],
     returnGeometry: true,
-    // outSpatialReference: { wkid: 4326 },
   });
 
   if (!decisionResult.features || decisionResult.features.length === 0) {
