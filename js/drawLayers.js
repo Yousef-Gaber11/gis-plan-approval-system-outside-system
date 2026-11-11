@@ -1,6 +1,9 @@
+import { getEsriModules } from "./esriLibrary.js";
 import { layersDictionary } from "./layersConfig.js";
 
-function createMapLayer(geoJson, renderer, labelClass, title, GeoJSONLayer) {
+function createMapLayer(geoJson, renderer, labelClass, title) {
+  const { GeoJSONLayer } = getEsriModules();
+
   const blob = new Blob([JSON.stringify(geoJson)], {
     type: "application/json",
   });
@@ -16,7 +19,7 @@ function createMapLayer(geoJson, renderer, labelClass, title, GeoJSONLayer) {
   return layer;
 }
 
-export async function drawLayers(geoLayers, view, GeoJSONLayer) {
+export async function drawLayers(geoLayers, view) {
   const map = view.map;
   let overallExtent = null;
 
@@ -44,7 +47,6 @@ export async function drawLayers(geoLayers, view, GeoJSONLayer) {
       config.renderer,
       config.labelClass || null,
       config.title,
-      GeoJSONLayer,
     );
     map.add(mapLayer);
 

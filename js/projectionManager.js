@@ -1,3 +1,5 @@
+import { getEsriModules } from "./esriLibrary.js";
+
 //* checkGeographic
 function checkGeographic(geometry) {
   if (!geometry) return false;
@@ -18,11 +20,9 @@ function createAndReprojectLayer(
   layerData,
   sourceSpatialReference,
   targetSpatialReference,
-  projectionEngine,
-  Polygon,
-  Polyline,
-  Point,
 ) {
+  const { projection, Polygon, Polyline, Point } = getEsriModules();
+
   const processedFeatures = layerData.features.map((feature) => {
     if (!feature.geometry) return feature;
 
@@ -66,10 +66,7 @@ function createAndReprojectLayer(
 
     let finalGeometry = esriGeometry;
     if (sourceSpatialReference.wkid !== targetSpatialReference.wkid) {
-      finalGeometry = projectionEngine.project(
-        esriGeometry,
-        targetSpatialReference,
-      );
+      finalGeometry = projection.project(esriGeometry, targetSpatialReference);
     }
 
     let newCoords;
@@ -96,16 +93,10 @@ function createAndReprojectLayer(
 }
 
 //* reprojectAllLayers
-export async function reprojectAllLayers(
-  rawLayers,
-  targetMetricWkid,
-  SpatialReference,
-  projectionEngine,
-  Polygon,
-  Polyline,
-  Point,
-) {
-  if (!projectionEngine.isLoaded()) await projectionEngine.load();
+export async function reprojectAllLayers(rawLayers, targetMetricWkid) {
+  const { projection, SpatialReference } = getEsriModules();
+
+  if (!projection.isLoaded()) await projection.load();
 
   const wgs84SpatialReference = new SpatialReference({ wkid: 4326 });
   const targetMetricSpatialReference = new SpatialReference({
@@ -131,20 +122,12 @@ export async function reprojectAllLayers(
       layer,
       sourceSpatialReference,
       wgs84SpatialReference,
-      projectionEngine,
-      Polygon,
-      Polyline,
-      Point,
     );
 
     const metricLayer = createAndReprojectLayer(
       layer,
       sourceSpatialReference,
       targetMetricSpatialReference,
-      projectionEngine,
-      Polygon,
-      Polyline,
-      Point,
     );
 
     geographicLayers.push(geographicLayer);

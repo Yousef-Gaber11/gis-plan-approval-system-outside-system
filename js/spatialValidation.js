@@ -1,11 +1,9 @@
-let geometryEngine = null;
-
-export function initSpatialValidation(geEngine) {
-  geometryEngine = geEngine;
-}
+import { getEsriModules } from "./esriLibrary.js";
 
 //* checkContextBoundary for planExtent and contextPolygon("municipality" or "decision")
 export function checkContextBoundary(planExtent, contextPolygon, contextType) {
+  const { geometryEngine } = getEsriModules();
+
   const isInside = geometryEngine.within(planExtent, contextPolygon);
   const isIntersecting = geometryEngine.intersects(planExtent, contextPolygon);
 
@@ -31,5 +29,6 @@ export function checkContextBoundary(planExtent, contextPolygon, contextType) {
 
 // * fun calculate Area
 export function calculateProjectedArea(metricGeometry) {
+  const { geometryEngine } = getEsriModules();
   return geometryEngine.planarArea(metricGeometry, "square-meters");
 }

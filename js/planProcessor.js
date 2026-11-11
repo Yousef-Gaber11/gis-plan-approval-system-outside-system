@@ -5,15 +5,7 @@ import {
   calculateProjectedArea,
 } from "./spatialValidation.js";
 
-export async function processPlanValidation(
-  rawLayers,
-  activeContext,
-  SpatialReference,
-  projection,
-  Polygon,
-  Polyline,
-  Point,
-) {
+export async function processPlanValidation(rawLayers, activeContext) {
   const zone = activeContext.zone;
   const contextType = activeContext.type || "municipality";
 
@@ -26,11 +18,6 @@ export async function processPlanValidation(
   const { geoLayers, metricLayers } = await reprojectAllLayers(
     rawLayers,
     zone.wkid,
-    SpatialReference,
-    projection,
-    Polygon,
-    Polyline,
-    Point,
   );
 
   //* ==============

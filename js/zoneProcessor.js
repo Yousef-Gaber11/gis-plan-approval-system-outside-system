@@ -1,7 +1,10 @@
+import { getEsriModules } from "./esriLibrary.js";
 import { zonesFeatureCollection } from "./zonesData.js";
 
 //* Local Zone Layer Builder
-export function buildLocalZoneLayer(Polygon, Graphic, FeatureLayer) {
+export function buildLocalZoneLayer() {
+  const { Polygon, Graphic, FeatureLayer } = getEsriModules();
+
   const graphics = zonesFeatureCollection.features.map((feat, index) => {
     const polyGeom = new Polygon({
       rings: feat.geometry.rings,
@@ -41,11 +44,9 @@ export async function queryIntersectingZones(decisionPolygon, localLayer) {
 }
 
 //* Calculate Maximum Zone Area
-export function calculateMaxZoneArea(
-  intersectingFeatures,
-  decisionPolygon,
-  geometryEngine,
-) {
+export function calculateMaxZoneArea(intersectingFeatures, decisionPolygon) {
+  const { geometryEngine } = getEsriModules();
+
   let bestZone = null;
   let maxArea = -1;
 

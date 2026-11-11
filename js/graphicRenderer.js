@@ -1,11 +1,8 @@
-export async function drawContextPolygon(
-  view,
-  polygon,
-  contextType,
-  title,
-  GraphicsLayer,
-  Graphic,
-) {
+import { getEsriModules } from "./esriLibrary.js";
+
+export async function drawContextPolygon(view, polygon, contextType, title) {
+  const { GraphicsLayer, Graphic } = getEsriModules();
+
   const layer = new GraphicsLayer({ title: title });
 
   let fillColor, outlineColor;

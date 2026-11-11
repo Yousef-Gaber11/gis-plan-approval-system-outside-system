@@ -1,4 +1,8 @@
-export function setupLayerListWidget(LayerList, Expand, view) {
+import { getEsriModules } from "./esriLibrary.js";
+
+export function setupLayerListWidget(view) {
+  const { LayerList, Expand } = getEsriModules();
+
   const layerList = new LayerList({
     view: view,
     listItemCreatedFunction: function (event) {

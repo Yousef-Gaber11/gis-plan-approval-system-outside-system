@@ -2,14 +2,9 @@ import { fetchMunicipalityData, MUNICIPALITY_CODE } from "./queriesService.js";
 import { drawContextPolygon } from "./graphicRenderer.js";
 import { formatZoneOutput } from "./zoneProcessor.js";
 
-export async function municipalityManager(
-  view,
-  GraphicsLayer,
-  Graphic,
-  FeatureLayer,
-) {
+export async function municipalityManager(view) {
   //* Query Municipality Data
-  const feature = await fetchMunicipalityData(MUNICIPALITY_CODE, FeatureLayer);
+  const feature = await fetchMunicipalityData(MUNICIPALITY_CODE);
   const attrs = feature.attributes;
 
   //* Format Zone
@@ -32,8 +27,6 @@ export async function municipalityManager(
     municipalityContext.polygon,
     "municipality",
     "حدود البلدية",
-    GraphicsLayer,
-    Graphic,
   );
 
   return { context: municipalityContext, layer: muniLayer };
