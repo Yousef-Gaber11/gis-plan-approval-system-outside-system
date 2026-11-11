@@ -10,19 +10,14 @@ import {
 export async function surveyDecisionManager(
   krokino,
   view,
-  GraphicsLayer,
-  Graphic,
-  FeatureLayer,
-  geometryEngine,
-  Polygon,
 ) {
   //* Query Survey Decision Data
-  const decisionFeature = await fetchSurveyDecisionData(krokino, FeatureLayer);
+  const decisionFeature = await fetchSurveyDecisionData(krokino);
   const decisionPolygon = decisionFeature.geometry;
   const attrs = decisionFeature.attributes;
 
   //* Build Local Zone Layer
-  const localZoneLayer = buildLocalZoneLayer(Polygon, Graphic, FeatureLayer);
+  const localZoneLayer = buildLocalZoneLayer();
   //* Query Intersecting Zones
   const intersectingZones = await queryIntersectingZones(
     decisionPolygon,
@@ -32,7 +27,6 @@ export async function surveyDecisionManager(
   const bestZoneRaw = calculateMaxZoneArea(
     intersectingZones,
     decisionPolygon,
-    geometryEngine,
   );
   //* Format Zone Output
   const finalZone = formatZoneOutput(bestZoneRaw);
@@ -63,8 +57,6 @@ export async function surveyDecisionManager(
     surveyContext.polygon,
     "decision",
     "حدود القرار المساحي",
-    GraphicsLayer,
-    Graphic,
   );
 
   return { context: surveyContext, layer: surveyLayer };
