@@ -1,32 +1,13 @@
-import { getEsriModules } from "./esriLibrary.js";
+import { executeBaseQuery } from "./queryTemplates.js";
 
-//* MUNICIPALITYUNIQUECODE (Default)
 export const MUNICIPALITY_CODE = "011001001";
-
 const MUNI_SERVICE_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/BasicMap/MapServer/4";
 const SURVEY_DECISION_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/EditLayers/mapServer/2";
 
-//* Template for executing a base query
-async function executeBaseQuery(url, whereClause, outFields, errorMsg) {
-  const { FeatureLayer } = getEsriModules();
-
-  const layer = new FeatureLayer({ url });
-  const result = await layer.queryFeatures({
-    where: whereClause,
-    outFields,
-    returnGeometry: true,
-  });
-
-  if (!result.features || result.features.length === 0) {
-    throw new Error(errorMsg);
-  }
-  return result.features[0];
-}
-
-//* Query Municipality Data
-export function fetchMunicipalityData(code) {
+//* fetch Municipality Data
+export function fetchMunicipalityData(code = MUNICIPALITY_CODE) {
   return executeBaseQuery(
     MUNI_SERVICE_URL,
     `MUNICIPALITYUNIQUECODE = '${code}'`,
@@ -35,7 +16,7 @@ export function fetchMunicipalityData(code) {
   );
 }
 
-//* Query Survey Decision Data
+//* fetch Survey Decision Data
 export function fetchSurveyDecisionData(krokino) {
   return executeBaseQuery(
     SURVEY_DECISION_URL,

@@ -4,14 +4,23 @@ import { processPlanValidation } from "./planProcessor.js";
 import { calcStatistics, renderJson } from "./statistics.js";
 import { setupLayerListWidget } from "./layerManager.js";
 import { drawLayers } from "./drawLayers.js";
-import { municipalityManager } from "./municipalityManager.js";
 import {
   setLoadingState,
   setInvalidPlanState,
   setValidPlanState,
   setErrorState,
 } from "./uiManager.js";
-import { surveyDecisionManager } from "./surveyDecisionManager.js";
+
+import {
+  fetchMunicipalityData,
+  fetchSurveyDecisionData,
+  MUNICIPALITY_CODE,
+} from "./businessQueries.js";
+import { executeIntersectQuery } from "./queryTemplates.js";
+import { buildLocalLayer } from "./layerBuilder.js";
+import { zonesFeatureCollection } from "./zonesData.js";
+import { formatZoneOutput, calculateMaxIntersectingArea } from "./helperFun.js";
+import { drawContextPolygon } from "./graphicRenderer.js";
 
 async function initializeApp() {
   try {
@@ -62,23 +71,97 @@ async function initializeApp() {
       fileInput.value = "";
 
       try {
-        let result;
         if (radioMuni.checked) {
           validationViewer.textContent =
             "جاري الاتصال بالسيرفر لجلب نطاق البلدية...";
-          //* Municipality Path
-          result = await municipalityManager(view);
+
+          //* 1. fetch Municipality Data
+          const feature = await fetchMunicipalityData(MUNICIPALITY_CODE);
+          const attrs = feature.attributes;
+
+          //* 2. Format Zone
+          const zone = formatZoneOutput(
+            attrs.ZONE ? parseInt(attrs.ZONE, 10) : null,
+          );
+          activeContext = {
+            type: "municipality",
+            code: MUNICIPALITY_CODE,
+            name:
+              (attrs.MUNICIPALITYARNAME || "") +
+              (attrs.AMANA ? " - " + attrs.AMANA : ""),
+            polygon: feature.geometry,
+            zone: zone,
+            attributes: attrs,
+          };
+
+          //* 3. draw Municipality Polygon
+          activeLayer = await drawContextPolygon(
+            view,
+            activeContext.polygon,
+            "municipality",
+            "حدود البلدية",
+          );
         } else {
           const krokino = inputKrokino.value.trim();
           if (!krokino) throw new Error("يرجى إدخال رقم القرار المساحي اولا");
+
           validationViewer.textContent =
             "جاري الاتصال بالسيرفر لجلب القرار المساحي واستنتاج الزون...";
-          //* Survey Decision Path
-          result = await surveyDecisionManager(krokino, view);
-        }
 
-        activeContext = result.context;
-        activeLayer = result.layer;
+          //* 1. fetch Survey Decision Data
+          const feature = await fetchSurveyDecisionData(krokino);
+          const decisionPolygon = feature.geometry;
+          const attrs = feature.attributes;
+
+          const fieldsDef = [
+            { name: "OBJECTID", type: "oid" },
+            { name: "ZONE", type: "integer" },
+          ];
+          //* 2. build Local Zone Layer
+          const localZoneLayer = buildLocalLayer(
+            zonesFeatureCollection,
+            fieldsDef,
+          );
+          //* 3. Query Intersecting Zones
+          const intersectingZones = await executeIntersectQuery(
+            decisionPolygon,
+            localZoneLayer,
+            ["ZONE"],
+          );
+
+          //* 4. Calculate Max Intersecting Area
+          const bestZoneRaw = calculateMaxIntersectingArea(
+            intersectingZones,
+            decisionPolygon,
+            "ZONE",
+          );
+          //* 5. Format Zone Output
+          const finalZone = formatZoneOutput(bestZoneRaw);
+
+          if (!finalZone) {
+            throw new Error(
+              "تعذر استنتاج الزون، القرار المساحي قد يقع خارج النطاقات المعتمدة.",
+            );
+          }
+
+          activeContext = {
+            type: "decision",
+            code: krokino,
+            name: `القرار المساحي: ${krokino}`,
+            landArea: attrs.LANDAREA || 0,
+            polygon: decisionPolygon,
+            zone: finalZone,
+            attributes: attrs,
+          };
+
+          //* 6. draw Survey Decision Polygon
+          activeLayer = await drawContextPolygon(
+            view,
+            activeContext.polygon,
+            "decision",
+            "حدود القرار المساحي",
+          );
+        }
 
         if (activeContext) {
           uploadSectionDiv.classList.remove("disabled");
