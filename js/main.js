@@ -1,33 +1,24 @@
 import { loadEsriModules } from "./esriLibrary.js";
-import { shapefileApi } from "./apiService.js";
-import { processPlanValidation } from "./planProcessor.js";
-import { calcStatistics, renderJson } from "./statistics.js";
-import { setupLayerListWidget } from "./layerManager.js";
-import { drawLayers } from "./drawLayers.js";
 import {
-  setLoadingState,
-  setInvalidPlanState,
-  setValidPlanState,
-  setErrorState,
-} from "./uiManager.js";
-
-import {
-  fetchMunicipalityData,
-  fetchSurveyDecisionData,
+  getMunicipality,
+  getSurveyDecision,
+  processPlan,
   MUNICIPALITY_CODE,
-} from "./businessQueries.js";
-import { executeIntersectQuery } from "./queryTemplates.js";
-import { buildLocalLayer } from "./layerBuilder.js";
-import { zonesFeatureCollection } from "./zonesData.js";
-import { formatZoneOutput, calculateMaxIntersectingArea } from "./helperFun.js";
-import { drawContextPolygon } from "./graphicRenderer.js";
+} from "./business.js";
+import {
+  setupLayerListWidget,
+  parseShapefile,
+  calcStatistics,
+  renderStatistics,
+  drawLayers,
+} from "./templates.js";
 
 async function initializeApp() {
   try {
     const esri = await loadEsriModules();
 
     const map = new esri.Map({
-      basemap: "satellite", //"hybrid"
+      basemap: "satellite",
     });
     const view = new esri.MapView({
       container: "viewDiv",
@@ -39,8 +30,8 @@ async function initializeApp() {
     setupLayerListWidget(view);
 
     const fileInput = document.getElementById("shpFileInput");
-    const jsonViewer = document.getElementById("jsonViewer");
-    const validationViewer = document.getElementById("validationViewer");
+    const statisticsPanel = document.getElementById("jsonViewer");
+    const statusPanel = document.getElementById("validationViewer");
     const uploadSectionDiv = document.getElementById("uploadSectionDiv");
     const radioMuni = document.getElementById("radioMuni");
     const radioDecision = document.getElementById("radioDecision");
@@ -57,7 +48,7 @@ async function initializeApp() {
       inputKrokino.style.display = "block";
     });
 
-    //* step 1 --> fetch the context (municipality or survey decision)
+    //* step 1 --> fetch (municipality or survey decision)
     let activeContext = null;
     let activeLayer = null;
 
@@ -71,110 +62,38 @@ async function initializeApp() {
       fileInput.value = "";
 
       try {
+        let result;
         if (radioMuni.checked) {
-          validationViewer.textContent =
+          statusPanel.textContent =
             "جاري الاتصال بالسيرفر لجلب نطاق البلدية...";
 
-          //* 1. fetch Municipality Data
-          const feature = await fetchMunicipalityData(MUNICIPALITY_CODE);
-          const attrs = feature.attributes;
-
-          //* 2. Format Zone
-          const zone = formatZoneOutput(
-            attrs.ZONE ? parseInt(attrs.ZONE, 10) : null,
-          );
-          activeContext = {
-            type: "municipality",
-            code: MUNICIPALITY_CODE,
-            name:
-              (attrs.MUNICIPALITYARNAME || "") +
-              (attrs.AMANA ? " - " + attrs.AMANA : ""),
-            polygon: feature.geometry,
-            zone: zone,
-            attributes: attrs,
-          };
-
-          //* 3. draw Municipality Polygon
-          activeLayer = await drawContextPolygon(
-            view,
-            activeContext.polygon,
-            "municipality",
-            "حدود البلدية",
-          );
+          //^ Municipality
+          result = await getMunicipality(view, MUNICIPALITY_CODE);
         } else {
           const krokino = inputKrokino.value.trim();
-          if (!krokino) throw new Error("يرجى إدخال رقم القرار المساحي اولا");
 
-          validationViewer.textContent =
+          if (!krokino) throw new Error("يرجى إدخال رقم القرار المساحي اولا");
+          statusPanel.textContent =
             "جاري الاتصال بالسيرفر لجلب القرار المساحي واستنتاج الزون...";
 
-          //* 1. fetch Survey Decision Data
-          const feature = await fetchSurveyDecisionData(krokino);
-          const decisionPolygon = feature.geometry;
-          const attrs = feature.attributes;
-
-          const fieldsDef = [
-            { name: "OBJECTID", type: "oid" },
-            { name: "ZONE", type: "integer" },
-          ];
-          //* 2. build Local Zone Layer
-          const localZoneLayer = buildLocalLayer(
-            zonesFeatureCollection,
-            fieldsDef,
-          );
-          //* 3. Query Intersecting Zones
-          const intersectingZones = await executeIntersectQuery(
-            decisionPolygon,
-            localZoneLayer,
-            ["ZONE"],
-          );
-
-          //* 4. Calculate Max Intersecting Area
-          const bestZoneRaw = calculateMaxIntersectingArea(
-            intersectingZones,
-            decisionPolygon,
-            "ZONE",
-          );
-          //* 5. Format Zone Output
-          const finalZone = formatZoneOutput(bestZoneRaw);
-
-          if (!finalZone) {
-            throw new Error(
-              "تعذر استنتاج الزون، القرار المساحي قد يقع خارج النطاقات المعتمدة.",
-            );
-          }
-
-          activeContext = {
-            type: "decision",
-            code: krokino,
-            name: `القرار المساحي: ${krokino}`,
-            landArea: attrs.LANDAREA || 0,
-            polygon: decisionPolygon,
-            zone: finalZone,
-            attributes: attrs,
-          };
-
-          //* 6. draw Survey Decision Polygon
-          activeLayer = await drawContextPolygon(
-            view,
-            activeContext.polygon,
-            "decision",
-            "حدود القرار المساحي",
-          );
+          //^ Survey Decision
+          result = await getSurveyDecision(view, krokino);
         }
+
+        activeContext = result.context;
+        activeLayer = result.layer;
 
         if (activeContext) {
           uploadSectionDiv.classList.remove("disabled");
           fileInput.disabled = false;
-
           const zoneMsg = activeContext.zone
             ? ` - النطاق: <b>Zone ${activeContext.zone.number}</b>`
             : "";
-          validationViewer.innerHTML = `<span style="color:green;">تم تحميل (${activeContext.name})${zoneMsg} - في انتظار رفع المخطط...</span>`;
+          statusPanel.innerHTML = `<span style="color:green;">تم تحميل (${activeContext.name})${zoneMsg} - في انتظار رفع المخطط...</span>`;
         }
       } catch (err) {
         console.error(err);
-        validationViewer.innerHTML = `<span style="color:red;">خطأ: ${err.message}</span>`;
+        statusPanel.innerHTML = `<span style="color:red;">خطأ: ${err.message}</span>`;
       }
     });
 
@@ -182,7 +101,8 @@ async function initializeApp() {
     fileInput.addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
-      setLoadingState(jsonViewer, validationViewer);
+      statisticsPanel.textContent = "جاري رفع ومعالجة الملف على السيرفر...";
+      statusPanel.textContent = "جاري الفحص المكاني...";
       const layersToRemove = [];
       view.map.layers.forEach((layer) => {
         if (layer !== activeLayer) layersToRemove.push(layer);
@@ -195,42 +115,60 @@ async function initializeApp() {
             "بيانات النطاق غير متاحة للمطابقة. يرجى جلب النطاق الأساسي",
           );
         //^ read the shapefileApi
-        const rawLayers = await shapefileApi(file);
+        const rawLayers = await parseShapefile(file);
         //^ process the processPlanValidation
-        const validationResult = await processPlanValidation(
-          rawLayers,
-          activeContext,
-        );
+        const validationResult = await processPlan(rawLayers, activeContext);
 
-        const { isValid, boundsCheck, zone, projectedArea, geoLayers } =
-          validationResult;
+        const {
+          isValid,
+          boundsCheck,
+          zone,
+          projectedArea,
+          reprojectedLayers,
+          statistics,
+        } = validationResult;
 
         if (!isValid) {
-          setInvalidPlanState(
-            validationViewer,
-            jsonViewer,
-            boundsCheck.message,
-            activeContext.type,
-          );
+          const targetName =
+            activeContext.type === "decision" ? "القرار المساحي" : "البلدية";
+          statusPanel.innerHTML = `
+            <div style="margin-bottom: 8px; color:red; font-weight:bold;">${boundsCheck.message}</div>
+            <div style="color: gray;">تم إيقاف عملية الرسم والمعالجة لأن المخطط يقع خارج نطاق ${targetName} المعتمد.</div>
+          `;
+          statisticsPanel.textContent =
+            "تم إلغاء عرض البيانات (المخطط خارج النطاق).";
           fileInput.value = "";
           return;
         }
+        statusPanel.innerHTML = `
+          <div dir="rtl" style="text-align: right; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+              <strong>حالة المخطط:</strong> 
+              <span style="color:green;">${boundsCheck.message}</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+              <strong>نطاق <span dir="ltr" style="display:inline-block;">UTM</span> المستنتج:</strong> 
+              <span style="color:blue;" dir="ltr">Zone ${zone.number} (WKID: ${zone.wkid})</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
+              <strong>مساحة النطاق هندسياً (م²):</strong> 
+              <span style="color:green; font-weight:bold; font-size:15px;" dir="ltr">
+                ${projectedArea.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        `;
 
-        setValidPlanState(
-          validationViewer,
-          boundsCheck.message,
-          zone,
-          projectedArea,
-        );
-
-        // ^ calculate statistics
-        const statistics = calcStatistics(geoLayers, projectedArea);
-        renderJson(statistics, jsonViewer);
-        // ^ draw
-        await drawLayers(geoLayers, view);
+        //^ show statistics in the statistics panel
+        renderStatistics(statistics, statisticsPanel);
+        // ^ draw layers on the map
+        if (reprojectedLayers && reprojectedLayers.length > 0) {
+          await drawLayers(reprojectedLayers, view);
+        }
       } catch (err) {
         console.error(err);
-        setErrorState(validationViewer, jsonViewer, err.message);
+        statisticsPanel.textContent = "خطأ أثناء المعالجة: " + err.message;
+        statusPanel.innerHTML = `<span style="color:red">حدث خطأ: ${err.message}</span>`;
       } finally {
         fileInput.value = "";
       }
