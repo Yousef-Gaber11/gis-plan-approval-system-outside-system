@@ -8,6 +8,11 @@ const SURVEY_DECISION_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/EditLayers/mapServer/2";
 const DISTRICTS_SERVICE_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/BasicMap/MapServer/3";
+
+const STREETS_SERVICE_URL =
+  "https://gisstg227.momra.gov.sa/arcgis/rest/services/BaseMap/BasicMap/MapServer/0";
+const CITIES_SERVICE_URL =
+  "https://gisstg227.momra.gov.sa/arcgis/rest/services/Bundaries/Cities/MapServer/0";
 //* ----------------- Get Zone -----------------
 async function getZone(polygon) {
   const fieldsDef = [
@@ -125,6 +130,79 @@ export async function drawContextPolygon(view, context) {
   );
 }
 
+//^ ----------------- Intersected Streets & City Info -----------------
+
+//* ----------------- Get Intersected Streets -----------------
+export async function getIntersectedStreets(surveyPolygon) {
+  if (!surveyPolygon) return [];
+
+  const streetsLayer = templates.createServiceFeatureLayer(STREETS_SERVICE_URL);
+
+  const intersectingFeatures = await templates.intersectBureQuery(
+    surveyPolygon,
+    streetsLayer,
+    ["STREETNAME", "STREETTYPE"],
+  );
+
+  return intersectingFeatures.map((f) => {
+    const attrs = f.attributes || {};
+    return {
+      streetType: attrs.STREETTYPE || "لا يوجد",
+      streetName: attrs.STREETNAME || "لا يوجد",
+    };
+  });
+}
+
+//* ----------------- Get City Info -----------------
+export async function getCityInfo(surveyPolygon) {
+  if (!surveyPolygon) return { cityName: "لا يوجد", cityCode: "لا يوجد" };
+
+  const citiesLayer = templates.createServiceFeatureLayer(CITIES_SERVICE_URL);
+
+  const intersectingCities = await templates.intersectBureQuery(
+    surveyPolygon,
+    citiesLayer,
+    ["CITEYARNAME", "CITEYCODE"],
+  );
+
+  if (!intersectingCities || intersectingCities.length === 0) {
+    return { cityName: null, cityCode: null };
+  }
+
+  const attrs = intersectingCities[0].attributes || {};
+  return {
+    cityName: attrs.CITEYARNAME || null,
+    cityCode: attrs.CITEYCODE || null,
+  };
+}
+
+//* ----------------- Process Plan Validation  -----------------
+export async function processPlanValidation(surveyPolygon) {
+  let intersectedStreets = [];
+  let cityInfo = { cityName: null, cityCode: null };
+
+  try {
+    intersectedStreets = await getIntersectedStreets(surveyPolygon);
+  } catch (err) {
+    console.warn("فشل جلب الشوارع المتقاطعة من MapServer:", err);
+  }
+
+  try {
+    cityInfo = await getCityInfo(surveyPolygon);
+  } catch (err) {
+    console.warn("فشل جلب معلومات المدينة من MapServer:", err);
+  }
+
+  return {
+    IsPlanIntersectsWithStreets: intersectedStreets.length > 0,
+    IsPlanIntersectsWithStreetsErrorMessage:
+      intersectedStreets.length > 0
+        ? "المخطط يتقاطع مع طبقة الشوارع"
+        : "المخطط لا يتقاطع مع طبقة الشوارع",
+    IntersectedStreetsWithPlan: intersectedStreets,
+    cityInfo: cityInfo,
+  };
+}
 //^ ----------------- Process Plan -----------------
 
 //* ----------------- Process Municipality Plan -----------------
@@ -187,6 +265,10 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     activeContext,
   );
 
+  // ^ Process Plan Validation
+  const surveyPolygon = firstFeature.esriGeometry;
+  const planValidation = await processPlanValidation(surveyPolygon);
+
   return {
     isValid: true,
     boundsCheck,
@@ -195,6 +277,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     reprojectedLayers,
     statistics,
     ideaValidation,
+    planValidation,
   };
 }
 
@@ -294,6 +377,10 @@ async function processDecisionPlan(rawLayers, activeContext) {
     activeContext,
   );
 
+  // ^ Process Plan Validation
+  const surveyPolygon = activeContext.polygon;
+  const planValidation = await processPlanValidation(surveyPolygon);
+
   return {
     isValid: true,
     boundsCheck,
@@ -302,6 +389,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
     reprojectedLayers,
     statistics,
     ideaValidation,
+    planValidation,
   };
 }
 

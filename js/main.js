@@ -124,6 +124,7 @@ async function initializeApp() {
           reprojectedLayers,
           statistics,
           ideaValidation,
+          planValidation,
         } = validationResult;
 
         if (!isValid) {
@@ -159,11 +160,12 @@ async function initializeApp() {
 
         //^ Render Report (statistics + ideaValidation)
         const combinedReport = {
+          planValidation: planValidation,
           ideaValidation: ideaValidation,
           statistics: statistics,
         };
 
-        currentCombinedReport = { ideaValidation, statistics };
+        currentCombinedReport = combinedReport;
         currentReprojectedLayers = reprojectedLayers;
 
         templates.renderStatistics(currentCombinedReport, statisticsPanel);
