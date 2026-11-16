@@ -85,6 +85,12 @@ export async function intersectBureQuery(
   return result.features || [];
 }
 
+//* Create Service FeatureLayer from URL
+export function createServiceFeatureLayer(url) {
+  const { FeatureLayer } = getEsriModules();
+  return new FeatureLayer({ url });
+}
+
 //!-------------------------------------------            Zone Detection        -----------------------------------
 
 //* Create Layer
@@ -395,7 +401,7 @@ export function calcStatistics(
   if (contextType === "decision") {
     planArea = fallbackArea;
   } else {
-    planArea = toNum(survey?.features?.[0]?.properties?.Area);
+    planArea = toNum(survey?.features?.[0]?.attributes?.Area);
     if (planArea === 0 && fallbackArea > 0) {
       planArea = fallbackArea;
     }
@@ -411,7 +417,7 @@ export function calcStatistics(
   };
 
   for (const feature of parcels?.features ?? []) {
-    const p = feature.properties;
+    const p = feature.attributes;
     const name = getLandUseName(p.USECODE ?? "");
     const area = toNum(p.Area);
 
@@ -432,7 +438,7 @@ export function calcStatistics(
   }
 
   const sumArea = (layer) =>
-    (layer?.features ?? []).reduce((s, f) => s + toNum(f.properties.Area), 0);
+    (layer?.features ?? []).reduce((s, f) => s + toNum(f.attributes.Area), 0);
 
   statistics.PlansStreetsPlygonsS.area = sumArea(streets);
   statistics.PlansCarParkingS.area = sumArea(parking);
@@ -452,12 +458,145 @@ export function calcStatistics(
   return statistics;
 }
 
-//* Render Statistics
-export function renderStatistics(statistics, statisticsPanel) {
+//!-------------------------------------------    Plan Validation Rules        -----------------------------------
+
+export function validatePlanRules(layers, activeContext) {
+  const parcels = findLayer(layers, "ParcelsPolygonS");
+  const streetsPolygons = findLayer(layers, "PlansStreetsPlygonsS");
+  const streetsLines = findLayer(layers, "PlansStreetsLineL");
+  const blocks = findLayer(layers, "PlanBlocksS");
+  const lakes = findLayer(layers, "PlansLakesS");
+  const islands = findLayer(layers, "PlansRoadIslandsS");
+  const pathways = findLayer(layers, "WalkPathWaysS");
+  const parking = findLayer(layers, "PlansCarParkingS");
+
+  const contextPoly = activeContext?.polygon;
+  const { geometryEngine } = getEsriModules();
+
+  //* Check if a layer is completely within the context polygon
+  const checkLayerWithin = (layer, errorMsg) => {
+    if (!layer || !layer.features || layer.features.length === 0) {
+      return { isWithin: true, error: null };
+    }
+    const allInside = layer.features.every((f) => {
+      const geom = f.esriGeometry || f.geometry;
+      return geom ? geometryEngine.within(geom, contextPoly) : true;
+    });
+    return {
+      isWithin: allInside,
+      error: allInside ? null : errorMsg,
+    };
+  };
+
+  const blocksCheck = checkLayerWithin(
+    blocks,
+    "البلوكات او جزء منها خارج حدود المخطط",
+  );
+  const lakesCheck = checkLayerWithin(
+    lakes,
+    "البحيرات او جزء منها خارج حدود المخطط",
+  );
+  const islandsCheck = checkLayerWithin(
+    islands,
+    "الجزر الوسطية او جزء منها خارج حدود المخطط",
+  );
+  const streetsCheck = checkLayerWithin(
+    streetsLines,
+    "الشوارع او جزء منها خارج حدود المخطط",
+  );
+
+  const streetsPolyCheck = checkLayerWithin(
+    streetsPolygons,
+    "طبقة مضلع الشوارع او جزء منها خارج المخطط",
+  );
+  const pathwaysCheck = checkLayerWithin(
+    pathways,
+    "ممرات المشاة او جزء منها خارج حدود المخطط",
+  );
+  const parcelsCheck = checkLayerWithin(
+    parcels,
+    "قطع الأراضي او جزء منها خارج حدود المخطط",
+  );
+  const parkingCheck = checkLayerWithin(
+    parking,
+    "مواقف السيارات او جزء منها خارج حدود المخطط",
+  );
+
+  //* Check if any parcels intersect with each other
+  let isParcelsIntersects = false;
+  if (parcels?.features?.length > 1) {
+    for (let i = 0; i < parcels.features.length; i++) {
+      for (let j = i + 1; j < parcels.features.length; j++) {
+        const g1 =
+          parcels.features[i].esriGeometry || parcels.features[i].geometry;
+        const g2 =
+          parcels.features[j].esriGeometry || parcels.features[j].geometry;
+        // change "intersects" to "overlaps"
+        if (g1 && g2 && geometryEngine.overlaps(g1, g2)) {
+          isParcelsIntersects = true;
+          break;
+        }
+      }
+      if (isParcelsIntersects) break;
+    }
+  }
+
+  //* Check if any streets intersect with parcels
+  const streetLayerForParcels = streetsPolygons || streetsLines;
+  let isStreetsIntersectsWithParcels = false;
+  if (streetLayerForParcels?.features && parcels?.features) {
+    for (const sf of streetLayerForParcels.features) {
+      const sg = sf.esriGeometry || sf.geometry;
+      if (!sg) continue;
+      for (const pf of parcels.features) {
+        const pg = pf.esriGeometry || pf.geometry;
+        if (pg && geometryEngine.intersects(sg, pg)) {
+          isStreetsIntersectsWithParcels = true;
+          break;
+        }
+      }
+      if (isStreetsIntersectsWithParcels) break;
+    }
+  }
+
+  return {
+    isBlocksWithinPlan: blocksCheck.isWithin,
+    isBlocksWithinPlanErrorMessage: blocksCheck.error,
+    isPlansLakesWithinPlan: lakesCheck.isWithin,
+    isPlansLakesWithinPlanErrorMessage: lakesCheck.error,
+    isRoadIslandsWithinPlan: islandsCheck.isWithin,
+    isRoadIslandsWithinPlanErrorMessage: islandsCheck.error,
+    isStreetsWithinPlan: streetsCheck.isWithin,
+    isStreetsWithinPlanErrorMessage: streetsCheck.error,
+    isStreetsIntersectsWithParcels: isStreetsIntersectsWithParcels,
+    isStreetsIntersectsWithParcelsErrorMessage: isStreetsIntersectsWithParcels
+      ? "الشوارع تتقاطع مع قطع الأراضي"
+      : null,
+    isPlansStreetsPlygonsWithinPlan: streetsPolyCheck.isWithin,
+    isPlansStreetsPlygonsWithinPlanErrorMessage: streetsPolyCheck.error,
+    isWalkPathWaysWithinPlan: pathwaysCheck.isWithin,
+    isWalkPathWaysWithinPlanErrorMessage: pathwaysCheck.error,
+    isAllParcelsWithinPlan: parcelsCheck.isWithin,
+    isAllParcelsWithinPlanErrorMessage: parcelsCheck.error,
+    isPlansCarParkingWithinPlan: parkingCheck.isWithin,
+    isPlansCarParkingWithinPlanErrorMessage: parkingCheck.error,
+    isParcelsIntersects: isParcelsIntersects,
+    isParcelsIntersectsErrorMessage: isParcelsIntersects
+      ? "توجد قطع أراضي متداخلة فيما بينها"
+      : null,
+    isParcelsLayerExist: Boolean(parcels && parcels.features?.length > 0),
+  };
+}
+
+//!-------------------------------------------    Render (Statistics,validation)        -----------------------------------
+
+//* Render Statistics & Validation
+export function renderStatistics(combinedReport, statisticsPanel) {
   if (!statisticsPanel) return;
   statisticsPanel.innerHTML = "";
   statisticsPanel.classList.remove("waiting");
-  const formatter = new JSONFormatter({ statistics }, 3, {
+
+  const formatter = new JSONFormatter(combinedReport, 3, {
     hoverPreviewEnabled: false,
     theme: "light",
   });
@@ -468,9 +607,13 @@ export function renderStatistics(statistics, statisticsPanel) {
 
 function createMapLayer(geoJson, renderer, labelClass, title) {
   const { GeoJSONLayer } = getEsriModules();
-  const validFeatures = (geoJson.features || []).filter(
-    (f) => f.geometry && f.geometry.coordinates,
-  );
+  const validFeatures = (geoJson.features || [])
+    .filter((f) => f.geometry && (f.geometry.coordinates || f.esriGeometry))
+    .map((f) => ({
+      type: "Feature",
+      geometry: f.geometry,
+      properties: f.attributes || {},
+    }));
 
   const featureCollection = {
     type: "FeatureCollection",
@@ -508,9 +651,6 @@ export async function drawLayers(geoLayers, view) {
       (f) => f.geometry !== null,
     );
     if (!hasGeometry) {
-      console.warn(
-        `تم تخطي الطبقة ${layerName} لأنها لا تحتوي على بيانات هندسية.`,
-      );
       continue;
     }
 
@@ -544,4 +684,197 @@ export async function drawLayers(geoLayers, view) {
       console.error("خطأ أثناء تحريك الزووم", err);
     }
   }
+}
+//!-------------------------------------------  Helpers -----------------------------------
+
+//* Calculate Centroid of Ring Metric Geometry
+export function calculatePolygonCentroid(metricGeometry, ring) {
+  if (metricGeometry.centroid) return metricGeometry.centroid;
+
+  let sumX = 0,
+    sumY = 0;
+  const len = ring.length - 1;
+  for (let i = 0; i < len; i++) {
+    sumX += ring[i][0];
+    sumY += ring[i][1];
+  }
+  return { x: sumX / len, y: sumY / len };
+}
+
+//* Calculate Metric Segment Length
+export function calculateLength(p1, p2, spatialReference) {
+  const { geometryEngine, Polyline } = getEsriModules();
+  const lineMetric = new Polyline({
+    paths: [
+      [
+        [p1[0], p1[1]],
+        [p2[0], p2[1]],
+      ],
+    ],
+    spatialReference,
+  });
+  const length = round2(geometryEngine.planarLength(lineMetric, "meters"));
+  return { length, isShort: length <= 15 };
+}
+
+//* Calculate Azimuth Angle and Direction Text
+export function calculateDirection(p1, p2) {
+  const dx = p2[0] - p1[0];
+  const dy = p2[1] - p1[1];
+  let angleRad = Math.atan2(dx, dy);
+  let angleDeg = (angleRad * 180) / Math.PI;
+  if (angleDeg < 0) angleDeg += 360;
+
+  let direction = "شمال";
+  if (angleDeg >= 45 && angleDeg < 135) direction = "شرق";
+  else if (angleDeg >= 135 && angleDeg < 225) direction = "جنوب";
+  else if (angleDeg >= 225 && angleDeg < 315) direction = "غرب";
+
+  return { direction };
+}
+
+//* Calculate Inside Offset Label Point (WGS84 Projected)
+export function calculateInsideOffsetPoint(p1, p2, centroid, spatialReference) {
+  const { Point, projection } = getEsriModules();
+
+  const midX = (p1[0] + p2[0]) / 2;
+  const midY = (p1[1] + p2[1]) / 2;
+  const offsetX = midX + (centroid.x - midX) * 0.12;
+  const offsetY = midY + (centroid.y - midY) * 0.12;
+
+  const offsetPointMetric = new Point({
+    x: offsetX,
+    y: offsetY,
+    spatialReference,
+  });
+
+  return projection.project(offsetPointMetric, { wkid: 4326 });
+}
+
+//! ----------------- Draw All Parcel Line Labels -----------------
+
+let parcelLabelsGraphicsLayer = null;
+export function drawAllParcelLineLabels(view, allLabelsData) {
+  const { GraphicsLayer, Graphic } = getEsriModules();
+
+  if (!parcelLabelsGraphicsLayer) {
+    parcelLabelsGraphicsLayer = new GraphicsLayer({
+      title: "أبعاد وأطوال قطع الأراضي",
+      minScale: 1000,
+      maxScale: 0,
+    });
+    view.map.add(parcelLabelsGraphicsLayer);
+  } else {
+    parcelLabelsGraphicsLayer.removeAll();
+  }
+
+  if (!allLabelsData || allLabelsData.length === 0) return;
+
+  allLabelsData.forEach((item) => {
+    if (!item.geometry) return;
+
+    const textColor = item.isShort ? [220, 20, 60, 1] : [20, 20, 100, 1];
+
+    const textSymbol = {
+      type: "text",
+      color: textColor,
+      text: item.text,
+      font: { size: 8, weight: "bold", family: "sans-serif" },
+    };
+
+    const graphic = new Graphic({
+      geometry: item.geometry,
+      symbol: textSymbol,
+    });
+
+    parcelLabelsGraphicsLayer.add(graphic);
+  });
+}
+
+//!-------------------------------------------  Parcel Selection   -----------------------------------
+
+//* Find feature containing a target point
+export function findContainingFeature(features, targetPointGeo) {
+  if (!features || features.length === 0 || !targetPointGeo) return null;
+
+  const { geometryEngine } = getEsriModules();
+
+  return (
+    features.find((f) => {
+      const geom = f.esriGeometry || f.geometry;
+      return geom ? geometryEngine.contains(geom, targetPointGeo) : false;
+    }) || null
+  );
+}
+
+export function getFeatureAttributes(feature) {
+  return feature.attributes;
+}
+
+//* highlight Parcel
+let highlightGraphicsLayer = null;
+export function highlightParcel(view, esriGeometry) {
+  const { GraphicsLayer, Graphic } = getEsriModules();
+
+  if (!highlightGraphicsLayer) {
+    highlightGraphicsLayer = new GraphicsLayer({ title: "القطعة المختارة" });
+    view.map.add(highlightGraphicsLayer);
+  } else {
+    highlightGraphicsLayer.removeAll();
+  }
+
+  if (!esriGeometry) return;
+
+  const graphic = new Graphic({
+    geometry: esriGeometry,
+    symbol: {
+      type: "simple-fill",
+      color: [255, 255, 0, 0.35],
+      outline: {
+        color: [255, 215, 0, 1],
+        width: 3,
+      },
+    },
+  });
+  highlightGraphicsLayer.add(graphic);
+}
+
+//* Render Parcel Viewer
+export function renderParcelViewer(
+  parcelData,
+  combinedReport,
+  statisticsPanel,
+) {
+  if (!statisticsPanel) return;
+  statisticsPanel.innerHTML = "";
+
+  const backBtn = document.createElement("button");
+  backBtn.style.cssText = `
+      display: block;
+      margin-bottom: 12px;
+      padding: 7px 14px;
+      background-color: #007acc;
+      color: #ffffff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: bold;
+    `;
+  backBtn.textContent = "العودة إلى تقرير المخطط الإجمالي";
+
+  backBtn.onclick = () => {
+    if (highlightGraphicsLayer) {
+      highlightGraphicsLayer.removeAll();
+    }
+    renderStatistics(combinedReport, statisticsPanel);
+  };
+
+  statisticsPanel.appendChild(backBtn);
+
+  const formatter = new JSONFormatter(parcelData, 1, {
+    hoverPreviewEnabled: true,
+    theme: "light",
+  });
+  statisticsPanel.appendChild(formatter.render());
 }

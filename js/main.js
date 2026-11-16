@@ -1,17 +1,6 @@
 import { loadEsriModules } from "./esriLibrary.js";
-import {
-  getMunicipality,
-  getSurveyDecision,
-  processPlan,
-  MUNICIPALITY_CODE,
-} from "./business.js";
-import {
-  setupLayerListWidget,
-  parseShapefile,
-  calcStatistics,
-  renderStatistics,
-  drawLayers,
-} from "./templates.js";
+import * as business from "./business.js";
+import * as templates from "./templates.js";
 
 async function initializeApp() {
   try {
@@ -27,7 +16,7 @@ async function initializeApp() {
       zoom: 6,
     });
 
-    setupLayerListWidget(view);
+    templates.setupLayerListWidget(view);
 
     const fileInput = document.getElementById("shpFileInput");
     const statisticsPanel = document.getElementById("jsonViewer");
@@ -52,6 +41,9 @@ async function initializeApp() {
     let activeContext = null;
     let activeLayer = null;
 
+    let currentCombinedReport = null;
+    let currentReprojectedLayers = null;
+
     fetchContextBtn.addEventListener("click", async () => {
       if (activeLayer) view.map.layers.remove(activeLayer);
       activeContext = null;
@@ -68,7 +60,7 @@ async function initializeApp() {
             "جاري الاتصال بالسيرفر لجلب نطاق البلدية...";
 
           //^ Municipality
-          result = await getMunicipality(view, MUNICIPALITY_CODE);
+          result = await business.getMunicipality(business.MUNICIPALITY_CODE);
         } else {
           const krokino = inputKrokino.value.trim();
 
@@ -77,13 +69,15 @@ async function initializeApp() {
             "جاري الاتصال بالسيرفر لجلب القرار المساحي واستنتاج الزون...";
 
           //^ Survey Decision
-          result = await getSurveyDecision(view, krokino);
+          result = await business.getSurveyDecision(krokino);
         }
 
-        activeContext = result.context;
-        activeLayer = result.layer;
+        activeContext = result;
 
         if (activeContext) {
+          //^ Draw Context polygon
+          activeLayer = await business.drawContextPolygon(view, activeContext);
+
           uploadSectionDiv.classList.remove("disabled");
           fileInput.disabled = false;
           const zoneMsg = activeContext.zone
@@ -115,9 +109,12 @@ async function initializeApp() {
             "بيانات النطاق غير متاحة للمطابقة. يرجى جلب النطاق الأساسي",
           );
         //^ read the shapefileApi
-        const rawLayers = await parseShapefile(file);
+        const rawLayers = await templates.parseShapefile(file);
         //^ process the processPlanValidation
-        const validationResult = await processPlan(rawLayers, activeContext);
+        const validationResult = await business.processPlan(
+          rawLayers,
+          activeContext,
+        );
 
         const {
           isValid,
@@ -126,6 +123,7 @@ async function initializeApp() {
           projectedArea,
           reprojectedLayers,
           statistics,
+          ideaValidation,
         } = validationResult;
 
         if (!isValid) {
@@ -159,12 +157,24 @@ async function initializeApp() {
           </div>
         `;
 
-        //^ show statistics in the statistics panel
-        renderStatistics(statistics, statisticsPanel);
+        //^ Render Report (statistics + ideaValidation)
+        const combinedReport = {
+          ideaValidation: ideaValidation,
+          statistics: statistics,
+        };
+
+        currentCombinedReport = { ideaValidation, statistics };
+        currentReprojectedLayers = reprojectedLayers;
+
+        templates.renderStatistics(currentCombinedReport, statisticsPanel);
+
         // ^ draw layers on the map
         if (reprojectedLayers && reprojectedLayers.length > 0) {
-          await drawLayers(reprojectedLayers, view);
+          await templates.drawLayers(reprojectedLayers, view);
         }
+        //^ get all parcel labels and draw them on the map
+        const allParcelLabels = business.processAllParcels(reprojectedLayers);
+        templates.drawAllParcelLineLabels(view, allParcelLabels);
       } catch (err) {
         console.error(err);
         statisticsPanel.textContent = "خطأ أثناء المعالجة: " + err.message;
@@ -172,6 +182,25 @@ async function initializeApp() {
       } finally {
         fileInput.value = "";
       }
+    });
+    //* step 3 --> Map click event for parcel selection
+    view.on("click", async (event) => {
+      //^ get parcel details
+      const parcel = await business.getParcelDetails(
+        event.mapPoint,
+        currentReprojectedLayers,
+      );
+      if (!parcel) return;
+
+      //^ highlight parcel
+      templates.highlightParcel(view, parcel.geometry);
+
+      //^ render parcel viewer
+      templates.renderParcelViewer(
+        parcel.attributes,
+        currentCombinedReport,
+        statisticsPanel,
+      );
     });
   } catch (error) {
     console.error("فشل في تهيئة مكتبات Esri", error);

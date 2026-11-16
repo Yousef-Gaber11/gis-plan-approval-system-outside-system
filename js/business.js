@@ -1,16 +1,4 @@
-import {
-  fetchBureQuery,
-  intersectBureQuery,
-  createLayer,
-  calculateMaxIntersectingArea,
-  formatZoneOutput,
-  drawPolygon,
-  findLayer,
-  checkContextBoundary,
-  calculateProjectedArea,
-  reprojectFeatures,
-  calcStatistics,
-} from "./templates.js";
+import * as templates from "./templates.js";
 import { zonesFeatureCollection } from "./zonesData.js";
 
 export const MUNICIPALITY_CODE = "011001001";
@@ -18,7 +6,8 @@ const MUNI_SERVICE_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/BasicMap/MapServer/4";
 const SURVEY_DECISION_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/EditLayers/mapServer/2";
-
+const DISTRICTS_SERVICE_URL =
+  "https://gisstg229.momah.gov.sa/server/rest/services/Test/BasicMap/MapServer/3";
 //* ----------------- Get Zone -----------------
 async function getZone(polygon) {
   const fieldsDef = [
@@ -26,25 +15,28 @@ async function getZone(polygon) {
     { name: "ZONE", type: "integer" },
   ];
 
-  const zonesFeatureLayer = createLayer(zonesFeatureCollection, fieldsDef);
-  const intersectingZones = await intersectBureQuery(
+  const zonesFeatureLayer = templates.createLayer(
+    zonesFeatureCollection,
+    fieldsDef,
+  );
+  const intersectingZones = await templates.intersectBureQuery(
     polygon,
     zonesFeatureLayer,
     ["ZONE"],
   );
-  const detectedZoneCode = calculateMaxIntersectingArea(
+  const detectedZoneCode = templates.calculateMaxIntersectingArea(
     intersectingZones,
     polygon,
     "ZONE",
   );
 
-  return formatZoneOutput(detectedZoneCode);
+  return templates.formatZoneOutput(detectedZoneCode);
 }
 
 // * ----------------- Get Municipality -----------------
-export async function getMunicipality(view, code = MUNICIPALITY_CODE) {
+export async function getMunicipality(code = MUNICIPALITY_CODE) {
   //^َ Query
-  const feature = await fetchBureQuery(
+  const feature = await templates.fetchBureQuery(
     MUNI_SERVICE_URL,
     `MUNICIPALITYUNIQUECODE = '${code}'`,
     ["MUNICIPALITYARNAME", "AMANA"],
@@ -62,7 +54,7 @@ export async function getMunicipality(view, code = MUNICIPALITY_CODE) {
     );
   }
 
-  const context = {
+  return {
     type: "municipality",
     code: code,
     name:
@@ -72,22 +64,12 @@ export async function getMunicipality(view, code = MUNICIPALITY_CODE) {
     zone: zone,
     attributes: attrs,
   };
-
-  //^ Draw
-  const layer = await drawPolygon(
-    view,
-    context.polygon,
-    "municipality",
-    "حدود البلدية",
-  );
-
-  return { context, layer };
 }
 
 // * ----------------- Get Survey Decision -----------------
-export async function getSurveyDecision(view, krokino) {
+export async function getSurveyDecision(krokino) {
   //^ Query
-  const feature = await fetchBureQuery(
+  const feature = await templates.fetchBureQuery(
     SURVEY_DECISION_URL,
     `KROKINO = '${krokino}' and KROKITYPE='7018' and ISAPPROVED = 1`,
     ["KROKINO"],
@@ -107,11 +89,16 @@ export async function getSurveyDecision(view, krokino) {
 
   //^ Projection
   const [{ esriGeometry: geoGeometry, geometryUTM: metricGeometry }] =
-    await reprojectFeatures([{ geometry: decisionPolygon }], finalZone.wkid);
+    await templates.reprojectFeatures(
+      [{ geometry: decisionPolygon }],
+      finalZone.wkid,
+    );
   //^ Calc Area
-  const calculatedArea = Math.abs(calculateProjectedArea(metricGeometry));
+  const calculatedArea = Math.abs(
+    templates.calculateProjectedArea(metricGeometry),
+  );
 
-  const context = {
+  return {
     type: "decision",
     code: krokino,
     name: `القرار المساحي: ${krokino}`,
@@ -121,16 +108,21 @@ export async function getSurveyDecision(view, krokino) {
     zone: finalZone,
     attributes: attrs,
   };
+}
 
-  //^ Draw
-  const layer = await drawPolygon(
+//*------------------ Draw polygon (Municipality, Survey Decision) -----------------
+export async function drawContextPolygon(view, context) {
+  if (!view || !context || !context.polygon) return null;
+
+  const title =
+    context.type === "decision" ? "حدود القرار المساحي" : "حدود البلدية";
+
+  return await templates.drawPolygon(
     view,
     context.polygon,
-    "decision",
-    "حدود القرار المساحي",
+    context.type,
+    title,
   );
-
-  return { context, layer };
 }
 
 //^ ----------------- Process Plan -----------------
@@ -147,7 +139,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
   //^ Reproject all shapefile layers
   const reprojectedLayers = await Promise.all(
     rawLayers.map(async (layer) => {
-      const reprojectedFeatures = await reprojectFeatures(
+      const reprojectedFeatures = await templates.reprojectFeatures(
         layer.features || [],
         zone.wkid,
         layer.prj || "",
@@ -159,7 +151,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     }),
   );
 
-  const surveyLayer = findLayer(reprojectedLayers, "SurveyS");
+  const surveyLayer = templates.findLayer(reprojectedLayers, "SurveyS");
   const firstFeature = surveyLayer?.features?.[0];
 
   if (!firstFeature?.geometry) {
@@ -167,7 +159,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
   }
 
   //^ Municipality Boundary Check
-  const boundsCheck = checkContextBoundary(
+  const boundsCheck = templates.checkContextBoundary(
     firstFeature.esriGeometry || firstFeature.geometry,
     activeContext.polygon,
     "municipality",
@@ -179,14 +171,20 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
 
   //^ Calc Area
   const projectedArea = Math.abs(
-    calculateProjectedArea(firstFeature.geometryUTM),
+    templates.calculateProjectedArea(firstFeature.geometryUTM),
   );
 
   //^ Calc Statistics
-  const statistics = calcStatistics(
+  const statistics = templates.calcStatistics(
     reprojectedLayers,
     projectedArea,
     activeContext.type,
+  );
+
+  //^ Validate Plan Rules
+  const ideaValidation = templates.validatePlanRules(
+    reprojectedLayers,
+    activeContext,
   );
 
   return {
@@ -196,6 +194,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     projectedArea,
     reprojectedLayers,
     statistics,
+    ideaValidation,
   };
 }
 
@@ -211,7 +210,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
   //^ Reproject all shapefile layers
   const reprojectedLayers = await Promise.all(
     rawLayers.map(async (layer) => {
-      const reprojectedFeatures = await reprojectFeatures(
+      const reprojectedFeatures = await templates.reprojectFeatures(
         layer.features || [],
         zone.wkid,
         layer.prj || "",
@@ -221,11 +220,6 @@ async function processDecisionPlan(rawLayers, activeContext) {
         features: reprojectedFeatures,
       };
     }),
-  );
-
-  console.log(
-    "%c=== تقرير فحص طبقات الشيب فايل مع القرار المساحي ===",
-    "color: #0088cc; font-weight: bold; font-size: 13px;",
   );
 
   let globalHasInsideOrPartial = false;
@@ -241,7 +235,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
       const geom = feature.esriGeometry || feature.geometry;
       if (!geom) continue;
       //^ Check boundary with the decision polygon
-      const statusCheck = checkContextBoundary(
+      const statusCheck = templates.checkContextBoundary(
         geom,
         activeContext.polygon,
         "decision",
@@ -258,32 +252,6 @@ async function processDecisionPlan(rawLayers, activeContext) {
         globalHasOutside = true;
       }
     }
-
-    if (layerInsideOrPartialCount > 0 && layerOutsideCount === 0) {
-      console.log(
-        `%c${layer.fileName}: داخل القرار (${layerInsideOrPartialCount})`,
-        "color: green;",
-      );
-    } else if (layerInsideOrPartialCount === 0 && layerOutsideCount > 0) {
-      console.log(
-        `%c${layer.fileName}: خارج القرار! (${layerOutsideCount})`,
-        "color: red;",
-      );
-    } else if (layerInsideOrPartialCount > 0 && layerOutsideCount > 0) {
-      console.log(
-        `%c${layer.fileName}: جزئي (جوه: ${layerInsideOrPartialCount}, بره: ${layerOutsideCount})`,
-        "color: orange;",
-      );
-    } else {
-      console.log(`[Layer] ${layer.fileName}: لا تحتوي على عناصر صالحة للفحص.`);
-    }
-  }
-
-  if (globalHasOutside) {
-    console.log(
-      "%c[Summary]: المخطط يحتوي على بعض العناصر التي تقع خارج حدود القرار",
-      "color: orange; font-weight: bold;",
-    );
   }
 
   let finalStatus = "";
@@ -314,10 +282,16 @@ async function processDecisionPlan(rawLayers, activeContext) {
   const projectedArea = activeContext.landArea || 0;
 
   //^ Calc Statistics
-  const statistics = calcStatistics(
+  const statistics = templates.calcStatistics(
     reprojectedLayers,
     projectedArea,
     activeContext.type,
+  );
+
+  //^ Validate Plan Rules
+  const ideaValidation = templates.validatePlanRules(
+    reprojectedLayers,
+    activeContext,
   );
 
   return {
@@ -327,6 +301,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
     projectedArea,
     reprojectedLayers,
     statistics,
+    ideaValidation,
   };
 }
 
@@ -338,4 +313,146 @@ export async function processPlan(rawLayers, activeContext) {
     return processMunicipalityPlan(rawLayers, activeContext);
   }
   return processDecisionPlan(rawLayers, activeContext);
+}
+
+//^ ----------------- Get District Name -----------------
+export async function getDistrictName(parcelGeometry) {
+  if (!parcelGeometry) return "";
+
+  //^ Create FeatureLayer
+  const districtsLayer = templates.createServiceFeatureLayer(
+    DISTRICTS_SERVICE_URL,
+  );
+
+  const intersectingDistricts = await templates.intersectBureQuery(
+    parcelGeometry,
+    districtsLayer,
+    ["DISTRICTARNAME"],
+  );
+
+  if (!intersectingDistricts || intersectingDistricts.length === 0) {
+    return "غير محدد";
+  }
+
+  const attrs = intersectingDistricts[0].attributes;
+  return attrs.DISTRICTARNAME || "";
+}
+
+//^ ----------------- Get Parcel Details (Data Only) -----------------
+
+export async function getParcelDetails(mapPoint, reprojectedLayers) {
+  if (!reprojectedLayers) return null;
+
+  //^ find layer
+  const parcelsLayerData = templates.findLayer(
+    reprojectedLayers,
+    "ParcelsPolygonS",
+  );
+  if (!parcelsLayerData || !parcelsLayerData.features) return null;
+
+  //^ project mapPoint to WGS84
+  const [{ esriGeometry: clickPointGeo }] = await templates.reprojectFeatures(
+    [{ geometry: mapPoint }],
+    4326,
+  );
+  if (!clickPointGeo) return null;
+
+  //^ select parcel contains clicked point
+  const selectedFeature = templates.findContainingFeature(
+    parcelsLayerData.features,
+    clickPointGeo,
+  );
+  if (!selectedFeature) return null;
+
+  //^ extract attributes .shp
+  const attributes = templates.getFeatureAttributes(selectedFeature);
+
+  //^ hasParcelLineLessThan15M
+  const { hasParcelLineLessThan15M } = singleParcelProcessing(
+    selectedFeature.geometryUTM,
+  );
+
+  //^ District Name
+  const districtName = await getDistrictName(selectedFeature.esriGeometry);
+
+  const finalAttributes = {
+    ...attributes,
+    hasParcelLineLessThan15M: hasParcelLineLessThan15M,
+    DistrictName: districtName,
+  };
+
+  return {
+    attributes: finalAttributes,
+    geometry: selectedFeature.esriGeometry,
+  };
+}
+
+//^ -----------------Parcel Processing -----------------
+//^----------------------------------------------------------------------
+
+export function singleParcelProcessing(metricGeometry) {
+  if (
+    !metricGeometry ||
+    !metricGeometry.rings ||
+    metricGeometry.rings.length === 0
+  ) {
+    return { labelPoints: [], hasParcelLineLessThan15M: false };
+  }
+
+  const ring = metricGeometry.rings[0];
+  const centroid = templates.calculatePolygonCentroid(metricGeometry, ring);
+
+  const labelPoints = [];
+  let hasShortLine = false;
+
+  for (let i = 0; i < ring.length - 1; i++) {
+    const p1 = ring[i];
+    const p2 = ring[i + 1];
+
+    //^ 1. Length & Check if Short (< 15m)
+    const { length, isShort } = templates.calculateLength(
+      p1,
+      p2,
+      metricGeometry.spatialReference,
+    );
+    if (isShort) hasShortLine = true;
+
+    //^ calculate Direction
+    const { direction } = templates.calculateDirection(p1, p2);
+
+    //^  Calculate Label Point (Inside Offset)
+    const labelPointGeo = templates.calculateInsideOffsetPoint(
+      p1,
+      p2,
+      centroid,
+      metricGeometry.spatialReference,
+    );
+
+    labelPoints.push({
+      text: `${length} م (${direction})`,
+      geometry: labelPointGeo,
+      isShort,
+    });
+  }
+
+  return { labelPoints, hasParcelLineLessThan15M: hasShortLine };
+}
+
+//* ----------------- Process All Parcels Dimensions -----------------
+export function processAllParcels(reprojectedLayers) {
+  const parcelsLayerData = templates.findLayer(
+    reprojectedLayers,
+    "ParcelsPolygonS",
+  );
+  if (!parcelsLayerData || !parcelsLayerData.features) return [];
+
+  const allLabels = [];
+
+  for (const feature of parcelsLayerData.features) {
+    const metricGeom = feature.geometryUTM;
+    const { labelPoints } = singleParcelProcessing(metricGeom);
+    allLabels.push(...labelPoints);
+  }
+
+  return allLabels;
 }

@@ -81,7 +81,7 @@ namespace GisApi.Controllers
                             geoJsonFeatures.Add(new Dictionary<string, object?>
                             {
                                 ["type"] = "Feature",
-                                ["properties"] = properties,
+                                ["attributes"] = properties,
                                 ["geometry"] = geometry
                             });
                         }
