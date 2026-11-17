@@ -917,3 +917,113 @@ export function renderParcelViewer(
   });
   statisticsPanel.appendChild(formatter.render());
 }
+
+//! التحققات المطلوبة على الفكرة التصميمية
+//!------------------------------------------- Design Concept Validations -----------------------------------
+
+//* return attributes value by field name (case-insensitive)
+export function findAttributeValue(attributes, fieldName) {
+  if (!attributes) return undefined;
+  const targetKey = fieldName.toLowerCase();
+  const matchedKey = Object.keys(attributes).find(
+    (key) => key.toLowerCase() === targetKey,
+  );
+  return matchedKey ? attributes[matchedKey] : undefined;
+}
+
+//* Validator
+export function requiredValidationsForDesignConcept(layers, rules = []) {
+  for (const rule of rules) {
+    const { layerName, required = false, minFeatures, fields = [] } = rule;
+    const targetLayer = findLayer(layers, layerName);
+
+    //^ Required layer chk exists
+    if (required && !targetLayer) {
+      return {
+        isValid: false,
+        error: `طبقة (${layerName}) إجبارية وغير موجودة بالملف المرفوع.`,
+        layerName,
+        fieldName: "N/A",
+      };
+    }
+
+    //^ Required layer chk  at least one feature
+    if (targetLayer && minFeatures !== undefined) {
+      const count = targetLayer.features ? targetLayer.features.length : 0;
+      if (count < minFeatures) {
+        return {
+          isValid: false,
+          error: `طبقة (${layerName}) يجب أن تحتوي على ${minFeatures} عنصر على الأقل.`,
+          layerName,
+          fieldName: "N/A",
+        };
+      }
+    }
+
+    if (
+      !targetLayer ||
+      !targetLayer.features ||
+      targetLayer.features.length === 0
+    ) {
+      continue;
+    }
+
+    const uniqueTrackers = {};
+
+    for (let i = 0; i < targetLayer.features.length; i++) {
+      const feat = targetLayer.features[i];
+      const attrs = feat.attributes || {};
+
+      for (const fieldRule of fields) {
+        const { name, minVal, unique = false } = fieldRule;
+
+        //^  Get field value
+        const val = findAttributeValue(attrs, name);
+
+        //^ chk field (required or minVal) contains a value
+        if (unique || minVal !== undefined) {
+          if (val === undefined || val === null || String(val).trim() === "") {
+            return {
+              isValid: false,
+              error: `العنصر رقم ${i + 1} في طبقة (${layerName}) لا يحتوي على قيمة للحقل (${name}).`,
+              layerName,
+              fieldName: name,
+            };
+          }
+        }
+
+        // PARCELNO
+        //^ chk field value is unique
+        if (unique) {
+          const strVal = String(val).trim();
+          uniqueTrackers[name] = uniqueTrackers[name] || new Set();
+          if (uniqueTrackers[name].has(strVal)) {
+            return {
+              isValid: false,
+              error: `رقم قطعة الأرض / القيمة (${strVal}) مكررة في الحقل (${name}) داخل طبقة (${layerName}).`,
+              layerName,
+              fieldName: name,
+            };
+          }
+          uniqueTrackers[name].add(strVal);
+        }
+
+        // Area & STLENGHT
+        //^ chk field value is greater than minVal
+        if (minVal !== undefined) {
+          const numVal = toNum(val);
+          if (numVal <= minVal) {
+            return {
+              isValid: false,
+              error: `العنصر رقم ${i + 1} في طبقة (${layerName}) يحتوي على قيمة للحقل (${name}) أقل من أو تساوي ${minVal}.`,
+              layerName,
+              fieldName: name,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return { isValid: true };
+}

@@ -119,6 +119,7 @@ async function initializeApp() {
 
         const {
           isValid,
+          designValidationError,
           boundsCheck,
           zone,
           projectedArea,
@@ -132,15 +133,30 @@ async function initializeApp() {
         if (!isValid) {
           const targetName =
             activeContext.type === "decision" ? "القرار المساحي" : "البلدية";
-          statusPanel.innerHTML = `
-            <div style="margin-bottom: 8px; color:red; font-weight:bold;">${boundsCheck.message}</div>
-            <div style="color: gray;">تم إيقاف عملية الرسم والمعالجة لأن المخطط يقع خارج نطاق ${targetName} المعتمد.</div>
-          `;
+
+          if (designValidationError) {
+            const errDetails = designValidationError;
+            statusPanel.innerHTML = `
+              <div dir="rtl" style="text-align: right; color: red; font-weight: bold; padding: 6px; border: 1px solid red; border-radius: 4px; background: #fff0f0;">
+                <div style="font-size: 15px; margin-bottom: 6px;">تم إيقاف المخطط لعدم استيفاء الشروط الوصفية:</div>
+                <div style="font-size: 13px; color: #333;"><strong>السبب:</strong> ${errDetails.error}</div>
+                <div style="font-size: 13px; color: #333;"><strong>الطبقة:</strong> <code>${errDetails.layerName}</code></div>
+                <div style="font-size: 13px; color: #333;"><strong>اسم الحقل:</strong> <code>${errDetails.fieldName}</code></div>
+              </div>
+            `;
+          } else {
+            statusPanel.innerHTML = `
+              <div style="margin-bottom: 8px; color:red; font-weight:bold;">${boundsCheck.message}</div>
+              <div style="color: gray;">تم إيقاف عملية الرسم والمعالجة لأن المخطط يقع خارج نطاق ${targetName} المعتمد.</div>
+            `;
+          }
+
           statisticsPanel.textContent =
-            "تم إلغاء عرض البيانات (المخطط خارج النطاق).";
+            "تم إلغاء عرض البيانات (المخطط غير صالح).";
           fileInput.value = "";
           return;
         }
+
         statusPanel.innerHTML = `
           <div dir="rtl" style="text-align: right; display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">

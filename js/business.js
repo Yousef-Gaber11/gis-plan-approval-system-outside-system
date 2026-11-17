@@ -13,6 +13,31 @@ const STREETS_SERVICE_URL =
   "https://gisstg227.momra.gov.sa/arcgis/rest/services/BaseMap/BasicMap/MapServer/0";
 const CITIES_SERVICE_URL =
   "https://gisstg227.momra.gov.sa/arcgis/rest/services/Bundaries/Cities/MapServer/0";
+
+//!----------------- Design Concept Rules -----------------
+const DESIGN_CONCEPT_RULES = [
+  {
+    layerName: "ParcelsPolygonS",
+    required: true,
+    minFeatures: 1,
+    fields: [
+      { name: "PARCELNO" }, //unique: true
+      { name: "Area", minVal: 0 }, //10000000000000000
+    ],
+  },
+  {
+    layerName: "PlansStreetsLineL",
+    fields: [{ name: "STLENGHT", minVal: 0 }], //10000000000000000
+  },
+  {
+    layerName: "PlansStreetsPlygonsS",
+    fields: [{ name: "Area", minVal: 10000000000000000 }],
+  },
+  { layerName: "PlansCarParkingS", fields: [{ name: "Area", minVal: 0 }] },
+  { layerName: "PlansLakesS", fields: [{ name: "Area", minVal: 0 }] },
+  { layerName: "PlanBlocksS", fields: [{ name: "Area", minVal: 0 }] },
+];
+
 //* ----------------- Get Zone -----------------
 async function getZone(polygon) {
   const fieldsDef = [
@@ -150,7 +175,7 @@ export async function getIntersectedStreets(surveyPolygon, targetWkid) {
     "",
     "geometryUTM",
   );
-  
+
   const formattedStreets = intersectingFeatures.map((f) => {
     const attrs = f.attributes || {};
     return {
@@ -232,6 +257,18 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     );
   }
 
+  //^ Validate Design Concept Rules
+  const designValidation = templates.requiredValidationsForDesignConcept(
+    rawLayers,
+    DESIGN_CONCEPT_RULES,
+  );
+  if (!designValidation.isValid) {
+    return {
+      isValid: false,
+      designValidationError: designValidation,
+    };
+  }
+
   //^ Reproject all shapefile layers
   const reprojectedLayers = await Promise.all(
     rawLayers.map(async (layer) => {
@@ -310,6 +347,18 @@ async function processDecisionPlan(rawLayers, activeContext) {
     throw new Error(
       "بيانات النطاق الأساسي لا تحتوي على نطاق إحداثيات متري (ZONE) صالح.",
     );
+  }
+
+  //^ Validate Design Concept Rules
+  const designValidation = templates.requiredValidationsForDesignConcept(
+    rawLayers,
+    DESIGN_CONCEPT_RULES,
+  );
+  if (!designValidation.isValid) {
+    return {
+      isValid: false,
+      designValidationError: designValidation,
+    };
   }
 
   //^ Reproject all shapefile layers
