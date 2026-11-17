@@ -25,6 +25,44 @@ export function findLayer(layers, name) {
   );
 }
 
+//* Find nearest street to a target parcel geometry
+export function findNearestStreet(parcelMetricGeometry, streetFeatures) {
+  if (!parcelMetricGeometry || !streetFeatures || streetFeatures.length === 0) {
+    return { streetName: "غير محدد", distance: 0 };
+  }
+
+  const { geometryEngine } = getEsriModules();
+
+  let minDistance = Infinity;
+  let nearestStreetName = "غير محدد";
+
+  for (const street of streetFeatures) {
+    let streetGeom = street.geometryUTM;
+    if (!streetGeom) continue;
+
+    try {
+      const dist = geometryEngine.distance(
+        parcelMetricGeometry,
+        streetGeom,
+        "meters",
+      );
+
+      if (dist !== null && dist < minDistance) {
+        minDistance = dist;
+        const attrs = street.attributes || {};
+        nearestStreetName = attrs.STREETNAME || "شارع بدون اسم";
+      }
+    } catch (e) {
+      console.warn("تعذر حساب المسافة للشارع", e);
+    }
+  }
+
+  return {
+    streetName: nearestStreetName,
+    distance: Number.isFinite(minDistance) ? round2(minDistance) : 0,
+  };
+}
+
 //!-------------------------------------------       Layer List Widget        -----------------------------------
 
 export function setupLayerListWidget(view) {
@@ -341,6 +379,7 @@ export async function reprojectFeatures(
     return {
       ...f,
       type: "Feature",
+      attributes: f.attributes || {},
       geometry: geoJsonGeometry, //? GeoJSON for Drawing on Map
       esriGeometry: geoGeom, //? Esri Geometry for Checking Boundary
       [propName]: utmGeom, //? Metric Geometry for Area Calculation

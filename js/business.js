@@ -133,8 +133,8 @@ export async function drawContextPolygon(view, context) {
 //^ ----------------- Intersected Streets & City Info -----------------
 
 //* ----------------- Get Intersected Streets -----------------
-export async function getIntersectedStreets(surveyPolygon) {
-  if (!surveyPolygon) return [];
+export async function getIntersectedStreets(surveyPolygon, targetWkid) {
+  if (!surveyPolygon) return { formattedStreets: [], rawStreetFeatures: [] };
 
   const streetsLayer = templates.createServiceFeatureLayer(STREETS_SERVICE_URL);
 
@@ -144,13 +144,25 @@ export async function getIntersectedStreets(surveyPolygon) {
     ["STREETNAME", "STREETTYPE"],
   );
 
-  return intersectingFeatures.map((f) => {
+  const projectedStreets = await templates.reprojectFeatures(
+    intersectingFeatures,
+    targetWkid,
+    "",
+    "geometryUTM",
+  );
+  
+  const formattedStreets = intersectingFeatures.map((f) => {
     const attrs = f.attributes || {};
     return {
       streetType: attrs.STREETTYPE || "لا يوجد",
       streetName: attrs.STREETNAME || "لا يوجد",
     };
   });
+
+  return {
+    formattedStreets,
+    rawStreetFeatures: projectedStreets,
+  };
 }
 
 //* ----------------- Get City Info -----------------
@@ -177,12 +189,15 @@ export async function getCityInfo(surveyPolygon) {
 }
 
 //* ----------------- Process Plan Validation  -----------------
-export async function processPlanValidation(surveyPolygon) {
+export async function processPlanValidation(surveyPolygon, targetWkid) {
   let intersectedStreets = [];
+  let rawStreetFeatures = [];
   let cityInfo = { cityName: null, cityCode: null };
 
   try {
-    intersectedStreets = await getIntersectedStreets(surveyPolygon);
+    const streetsData = await getIntersectedStreets(surveyPolygon, targetWkid);
+    intersectedStreets = streetsData.formattedStreets;
+    rawStreetFeatures = streetsData.rawStreetFeatures;
   } catch (err) {
     console.warn("فشل جلب الشوارع المتقاطعة من MapServer:", err);
   }
@@ -194,13 +209,16 @@ export async function processPlanValidation(surveyPolygon) {
   }
 
   return {
-    IsPlanIntersectsWithStreets: intersectedStreets.length > 0,
-    IsPlanIntersectsWithStreetsErrorMessage:
-      intersectedStreets.length > 0
-        ? "المخطط يتقاطع مع طبقة الشوارع"
-        : "المخطط لا يتقاطع مع طبقة الشوارع",
-    IntersectedStreetsWithPlan: intersectedStreets,
-    cityInfo: cityInfo,
+    planValidation: {
+      IsPlanIntersectsWithStreets: intersectedStreets.length > 0,
+      IsPlanIntersectsWithStreetsErrorMessage:
+        intersectedStreets.length > 0
+          ? "المخطط يتقاطع مع طبقة الشوارع"
+          : "المخطط لا يتقاطع مع طبقة الشوارع",
+      IntersectedStreetsWithPlan: intersectedStreets,
+      cityInfo: cityInfo,
+    },
+    rawStreetFeatures: rawStreetFeatures,
   };
 }
 //^ ----------------- Process Plan -----------------
@@ -267,7 +285,10 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
 
   // ^ Process Plan Validation
   const surveyPolygon = firstFeature.esriGeometry;
-  const planValidation = await processPlanValidation(surveyPolygon);
+  const { planValidation, rawStreetFeatures } = await processPlanValidation(
+    surveyPolygon,
+    zone.wkid,
+  );
 
   return {
     isValid: true,
@@ -278,6 +299,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     statistics,
     ideaValidation,
     planValidation,
+    rawStreetFeatures,
   };
 }
 
@@ -379,7 +401,10 @@ async function processDecisionPlan(rawLayers, activeContext) {
 
   // ^ Process Plan Validation
   const surveyPolygon = activeContext.polygon;
-  const planValidation = await processPlanValidation(surveyPolygon);
+  const { planValidation, rawStreetFeatures } = await processPlanValidation(
+    surveyPolygon,
+    zone.wkid,
+  );
 
   return {
     isValid: true,
@@ -390,6 +415,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
     statistics,
     ideaValidation,
     planValidation,
+    rawStreetFeatures,
   };
 }
 
@@ -428,7 +454,11 @@ export async function getDistrictName(parcelGeometry) {
 
 //^ ----------------- Get Parcel Details (Data Only) -----------------
 
-export async function getParcelDetails(mapPoint, reprojectedLayers) {
+export async function getParcelDetails(
+  mapPoint,
+  reprojectedLayers,
+  cachedStreetFeatures,
+) {
   if (!reprojectedLayers) return null;
 
   //^ find layer
@@ -463,10 +493,20 @@ export async function getParcelDetails(mapPoint, reprojectedLayers) {
   //^ District Name
   const districtName = await getDistrictName(selectedFeature.esriGeometry);
 
+  //^ Nearest Street
+  const nearestStreet = templates.findNearestStreet(
+    selectedFeature.geometryUTM,
+    cachedStreetFeatures,
+  );
+
   const finalAttributes = {
     ...attributes,
     hasParcelLineLessThan15M: hasParcelLineLessThan15M,
     DistrictName: districtName,
+    NearestStreetName: nearestStreet ? nearestStreet.streetName : "غير محدد",
+    NearestStreetDistance: nearestStreet
+      ? `${nearestStreet.distance} م`
+      : "0 م",
   };
 
   return {

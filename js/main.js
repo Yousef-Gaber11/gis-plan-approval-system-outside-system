@@ -43,6 +43,7 @@ async function initializeApp() {
 
     let currentCombinedReport = null;
     let currentReprojectedLayers = null;
+    let currentStreetFeatures = [];
 
     fetchContextBtn.addEventListener("click", async () => {
       if (activeLayer) view.map.layers.remove(activeLayer);
@@ -125,6 +126,7 @@ async function initializeApp() {
           statistics,
           ideaValidation,
           planValidation,
+          rawStreetFeatures,
         } = validationResult;
 
         if (!isValid) {
@@ -165,6 +167,7 @@ async function initializeApp() {
           statistics: statistics,
         };
 
+        currentStreetFeatures = rawStreetFeatures || [];
         currentCombinedReport = combinedReport;
         currentReprojectedLayers = reprojectedLayers;
 
@@ -191,6 +194,7 @@ async function initializeApp() {
       const parcel = await business.getParcelDetails(
         event.mapPoint,
         currentReprojectedLayers,
+        currentStreetFeatures,
       );
       if (!parcel) return;
 
