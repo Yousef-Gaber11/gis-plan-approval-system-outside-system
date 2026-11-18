@@ -208,20 +208,32 @@ export function formatZoneOutput(detectedZone) {
 //!-------------------------------------------       Drawing Polygons        -----------------------------------
 
 //* Draw Polygon (municipality or survey decision)
-export async function drawPolygon(view, polygon, contextType, title) {
+//^ draw overlap
+export async function drawPolygon(
+  view,
+  polygon,
+  contextType,
+  title,
+  skipZoom = false,
+) {
   const { GraphicsLayer, Graphic } = getEsriModules();
 
   const layer = new GraphicsLayer({ title: title });
 
-  let fillColor, outlineColor;
+  let fillColor, outlineColor, outlineStyle;
   if (contextType === "decision") {
     fillColor = [0, 150, 255, 0.2];
     outlineColor = [0, 100, 255, 0.9];
+    outlineStyle = "dash";
+  } else if (contextType === "overlap") {
+    fillColor = [255, 0, 0, 0.55];
+    outlineColor = [255, 0, 0, 1];
+    outlineStyle = "solid";
   } else {
     fillColor = [255, 100, 0, 0.2];
     outlineColor = [255, 69, 0, 0.9];
+    outlineStyle = "dash";
   }
-
   const graphic = new Graphic({
     geometry: polygon,
     symbol: {
@@ -233,14 +245,21 @@ export async function drawPolygon(view, polygon, contextType, title) {
   });
 
   layer.add(graphic);
-  view.map.add(layer, 0);
 
-  await view.when();
-  await view.goTo(polygon.extent.expand(1.3), {
-    animate: true,
-    easing: "linear",
-    duration: 1200,
-  });
+  if (contextType === "overlap") {
+    view.map.add(layer);
+  } else {
+    view.map.add(layer, 0);
+  }
+
+  if (!skipZoom && polygon.extent) {
+    await view.when();
+    await view.goTo(polygon.extent.expand(1.3), {
+      animate: true,
+      easing: "linear",
+      duration: 1200,
+    });
+  }
 
   return layer;
 }
@@ -933,10 +952,14 @@ export function findAttributeValue(attributes, fieldName) {
 
 //* Validator
 export function requiredValidationsForDesignConcept(layers, rules = []) {
+  const warnings = [];
+
   for (const rule of rules) {
     const { layerName, required = false, minFeatures, fields = [] } = rule;
+
     const targetLayer = findLayer(layers, layerName);
 
+    //* ----------------------  STOOPER -------------------
     //^ Required layer chk exists
     if (required && !targetLayer) {
       return {
@@ -1025,5 +1048,76 @@ export function requiredValidationsForDesignConcept(layers, rules = []) {
     }
   }
 
-  return { isValid: true };
+  //*------------------
+  for (const rule of rules) {
+    const { layerName, noSelfOverlap = false } = rule;
+    const targetLayer = findLayer(layers, layerName);
+    //* -----------------  Warning: Check Self Overlap -----------------
+    if (noSelfOverlap && targetLayer.features.length > 1) {
+      const { geometryEngine } = getEsriModules();
+      const feats = targetLayer.features;
+
+      //!TEST
+      // if (feats.length > 0) {
+      //   //! 1
+      //   // feats[1].geometryUTM = feats[0].geometryUTM;
+      //   //! 2
+      //   const origGeom = feats[0].geometryUTM;
+      //   if (origGeom) {
+      //     feats[0].geometryUTM = geometryEngine.buffer(origGeom, 10, "meters");
+      //   }
+      // }
+
+      for (let i = 0; i < feats.length; i++) {
+        for (let j = i + 1; j < feats.length; j++) {
+          // const g1 = feats[i].geometryUTM;
+          //! TEST
+          const g1 =
+            i === 0 && feats[i].geometryUTM
+              ? geometryEngine.buffer(feats[i].geometryUTM, 10, "meters")
+              : feats[i].geometryUTM;
+          const g2 = feats[j].geometryUTM;
+
+          if (g1 && g2) {
+            const intersectionGeom = geometryEngine.intersect(g1, g2);
+
+            if (intersectionGeom) {
+              const overlapArea = geometryEngine.planarArea(
+                intersectionGeom,
+                "square-meters",
+              );
+
+              if (overlapArea > 0.01) {
+                const p1 =
+                  findAttributeValue(feats[i].attributes, "PARCELNO") ||
+                  `#${i + 1}`;
+                const p2 =
+                  findAttributeValue(feats[j].attributes, "PARCELNO") ||
+                  `#${j + 1}`;
+
+                const { projection, SpatialReference } = getEsriModules();
+                let geoIntersection = intersectionGeom;
+                if (projection.isLoaded()) {
+                  geoIntersection = projection.project(
+                    intersectionGeom,
+                    new SpatialReference({ wkid: 4326 }),
+                  );
+                }
+
+                warnings.push({
+                  type: "SELF_OVERLAP",
+                  layerName,
+                  message: `تداخل بمسافة (${round2(overlapArea)} م²) بين القطعة (${p1}) والقطعة (${p2}) داخل طبقة (${layerName}).`,
+                  polygon: geoIntersection,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  //*------------------
+
+  return { isValid: true, warnings };
 }

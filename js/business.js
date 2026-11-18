@@ -20,8 +20,9 @@ const DESIGN_CONCEPT_RULES = [
     layerName: "ParcelsPolygonS",
     required: true,
     minFeatures: 1,
+    noSelfOverlap: true, //^ Check for self-overlapping polygons
     fields: [
-      { name: "PARCELNO" }, //unique: true
+      { name: "PARCELNO", unique: false }, //unique: true
       { name: "Area", minVal: 0 }, //10000000000000000
     ],
   },
@@ -31,7 +32,7 @@ const DESIGN_CONCEPT_RULES = [
   },
   {
     layerName: "PlansStreetsPlygonsS",
-    fields: [{ name: "Area", minVal: 10000000000000000 }],
+    fields: [{ name: "Area", minVal: 0 }],
   },
   { layerName: "PlansCarParkingS", fields: [{ name: "Area", minVal: 0 }] },
   { layerName: "PlansLakesS", fields: [{ name: "Area", minVal: 0 }] },
@@ -257,18 +258,6 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     );
   }
 
-  //^ Validate Design Concept Rules
-  const designValidation = templates.requiredValidationsForDesignConcept(
-    rawLayers,
-    DESIGN_CONCEPT_RULES,
-  );
-  if (!designValidation.isValid) {
-    return {
-      isValid: false,
-      designValidationError: designValidation,
-    };
-  }
-
   //^ Reproject all shapefile layers
   const reprojectedLayers = await Promise.all(
     rawLayers.map(async (layer) => {
@@ -283,6 +272,18 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
       };
     }),
   );
+
+  //^ Validate Design Concept Rules
+  const designValidation = templates.requiredValidationsForDesignConcept(
+    reprojectedLayers,
+    DESIGN_CONCEPT_RULES,
+  );
+  if (!designValidation.isValid) {
+    return {
+      isValid: false,
+      designValidationError: designValidation,
+    };
+  }
 
   const surveyLayer = templates.findLayer(reprojectedLayers, "SurveyS");
   const firstFeature = surveyLayer?.features?.[0];
@@ -337,6 +338,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     ideaValidation,
     planValidation,
     rawStreetFeatures,
+    designWarnings: designValidation.warnings || [], //^ Include any warnings from design validation
   };
 }
 
@@ -347,18 +349,6 @@ async function processDecisionPlan(rawLayers, activeContext) {
     throw new Error(
       "بيانات النطاق الأساسي لا تحتوي على نطاق إحداثيات متري (ZONE) صالح.",
     );
-  }
-
-  //^ Validate Design Concept Rules
-  const designValidation = templates.requiredValidationsForDesignConcept(
-    rawLayers,
-    DESIGN_CONCEPT_RULES,
-  );
-  if (!designValidation.isValid) {
-    return {
-      isValid: false,
-      designValidationError: designValidation,
-    };
   }
 
   //^ Reproject all shapefile layers
@@ -375,6 +365,18 @@ async function processDecisionPlan(rawLayers, activeContext) {
       };
     }),
   );
+
+  //^ Validate Design Concept Rules
+  const designValidation = templates.requiredValidationsForDesignConcept(
+    reprojectedLayers,
+    DESIGN_CONCEPT_RULES,
+  );
+  if (!designValidation.isValid) {
+    return {
+      isValid: false,
+      designValidationError: designValidation,
+    };
+  }
 
   let globalHasInsideOrPartial = false;
   let globalHasOutside = false;
@@ -465,6 +467,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
     ideaValidation,
     planValidation,
     rawStreetFeatures,
+    designWarnings: designValidation.warnings || [], //^ Include any warnings from design validation
   };
 }
 

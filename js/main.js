@@ -120,6 +120,7 @@ async function initializeApp() {
         const {
           isValid,
           designValidationError,
+          designWarnings,
           boundsCheck,
           zone,
           projectedArea,
@@ -157,6 +158,20 @@ async function initializeApp() {
           return;
         }
 
+        //* render status panel with warnings
+        let warningsHtml = "";
+        if (designWarnings && designWarnings.length > 0) {
+          const warningsList = designWarnings
+            .map((w) => `<li>${w.message}</li>`)
+            .join("");
+          warningsHtml = `
+            <div dir="rtl" style="margin-top: 8px; padding: 10px 12px; background-color: #fffbe6; border: 1px solid #ffe58f; border-radius: 4px; color: #d46b08; font-size: 13px; text-align: right;">
+             <strong>تنبيهات:</strong>
+             <ul style="margin: 6px 0 0 0; padding-right: 20px;">${warningsList}</ul>
+            </div>
+          `;
+        }
+
         statusPanel.innerHTML = `
           <div dir="rtl" style="text-align: right; display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
@@ -173,6 +188,7 @@ async function initializeApp() {
                 ${projectedArea.toLocaleString("en-US", { maximumFractionDigits: 2 })}
               </span>
             </div>
+            ${warningsHtml}
           </div>
         `;
 
@@ -196,6 +212,35 @@ async function initializeApp() {
         //^ get all parcel labels and draw them on the map
         const allParcelLabels = business.processAllParcels(reprojectedLayers);
         templates.drawAllParcelLineLabels(view, allParcelLabels);
+
+        //* draw warnings polygons on the map
+        if (designWarnings && designWarnings.length > 0) {
+          let combinedExtent = null;
+
+          for (const warn of designWarnings) {
+            if (warn.polygon) {
+              await templates.drawPolygon(
+                view,
+                warn.polygon,
+                "overlap",
+                `تداخل مكاني - ${warn.layerName}`,
+                true,
+              );
+              if (warn.polygon.extent) {
+                combinedExtent = combinedExtent
+                  ? combinedExtent.union(warn.polygon.extent)
+                  : warn.polygon.extent.clone();
+              }
+            }
+          }
+          if (combinedExtent) {
+            await view.goTo(combinedExtent.expand(1.6), {
+              animate: true,
+              easing: "ease-in-out",
+              duration: 1200,
+            });
+          }
+        }
       } catch (err) {
         console.error(err);
         statisticsPanel.textContent = "خطأ أثناء المعالجة: " + err.message;
