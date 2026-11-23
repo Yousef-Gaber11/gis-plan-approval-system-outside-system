@@ -189,13 +189,13 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
     surveyPolygon,
     urbanAreaLayer,
     outFields,
-    "URBANAREABOUNDARYTYPE = 3",
+    "URBANAREABOUNDARYTYPE <> 3",
   );
 
   if (!intersectedFeatures || intersectedFeatures.length === 0) {
     return {
-      netaqCondition: "خارج النطاق",
-      urbanAreaDetails: null,
+      overallStatus: "خارج النطاق",
+      urbanBoundariesList: [],
       message: "القرار المساحي يقع بالكامل خارج النطاق العمراني المعتمد.",
     };
   }
@@ -207,30 +207,34 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
     "النطاق العمراني",
   );
 
-  let netaqCondition = "";
+  let overallStatus = "";
   if (boundaryCheck.status === "inside") {
-    netaqCondition = "داخل النطاق";
+    overallStatus = "داخل النطاق";
   } else if (boundaryCheck.status === "partial") {
-    netaqCondition = "جزء داخل وجزء خارج";
+    overallStatus = "جزء داخل وجزء خارج";
   } else {
-    netaqCondition = "خارج النطاق";
+    overallStatus = "خارج النطاق";
   }
 
-  const targetAttrs = intersectedFeatures[0].attributes || {};
+  //^ List of urban boundaries
+  const urbanBoundariesList = intersectedFeatures.map((f) => {
+    const attrs = f.attributes || {};
+    return {
+      URBANAREABOUNDARY_ID: attrs.URBANAREABOUNDARY_ID,
+      URBANAREABOUNDARYCODE: attrs.URBANAREABOUNDARYCODE,
+      URBANAREABOUNDARYTYPE: attrs.URBANAREABOUNDARYTYPE,
+      URBANAREABOUNDARYNAME_AR: attrs.URBANAREABOUNDARYNAME_AR,
+      URBANAREABOUNDARYYEAR: attrs.URBANAREABOUNDARYYEAR,
+      NETAQ_CONDITION: attrs.NETAQ_CONDITION,
+      URBANAREABOUNDARY_UNIFIED_ID: attrs.URBANAREABOUNDARY_UNIFIED_ID,
+    };
+  });
 
   return {
-    netaqCondition: netaqCondition,
-    urbanAreaDetails: {
-      URBANAREABOUNDARY_ID: targetAttrs.URBANAREABOUNDARY_ID,
-      URBANAREABOUNDARYCODE: targetAttrs.URBANAREABOUNDARYCODE,
-      URBANAREABOUNDARYTYPE: targetAttrs.URBANAREABOUNDARYTYPE,
-      URBANAREABOUNDARYNAME_AR: targetAttrs.URBANAREABOUNDARYNAME_AR,
-      URBANAREABOUNDARYYEAR: targetAttrs.URBANAREABOUNDARYYEAR,
-      NETAQ_CONDITION: netaqCondition,
-      URBANAREABOUNDARY_UNIFIED_ID: targetAttrs.URBANAREABOUNDARY_UNIFIED_ID,
-    },
+    overallStatus: overallStatus,
+    urbanBoundariesList: urbanBoundariesList,
     message:
-      netaqCondition === "داخل النطاق"
+      overallStatus === "داخل النطاق"
         ? "القرار المساحي يقع بالكامل داخل النطاق العمراني."
         : "جزء من القرار المساحي يقع خارج حدود النطاق العمراني.",
   };

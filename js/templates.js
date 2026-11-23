@@ -1151,6 +1151,8 @@ export function combineAndCheckBoundary(
 
 //* Helper لعرض النطاق العمراني
 export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
+  if (!urbanAreaPanel) return;
+
   if (!urban) {
     urbanAreaPanel.style.display = "none";
     urbanAreaPanel.innerHTML = "";
@@ -1158,38 +1160,54 @@ export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
   }
 
   const badgeColor =
-    urban.netaqCondition === "داخل النطاق"
+    urban.overallStatus === "داخل النطاق"
       ? "#2e7d32"
-      : urban.netaqCondition === "جزء داخل وجزء خارج"
+      : urban.overallStatus === "جزء داخل وجزء خارج"
         ? "#ed6c02"
         : "#d32f2f";
 
   const badgeBg =
-    urban.netaqCondition === "داخل النطاق"
+    urban.overallStatus === "داخل النطاق"
       ? "#e8f5e9"
-      : urban.netaqCondition === "جزء داخل وجزء خارج"
+      : urban.overallStatus === "جزء داخل وجزء خارج"
         ? "#fff3e0"
         : "#ffebee";
 
-  const details = urban.urbanAreaDetails;
+  const boundariesList = urban.urbanBoundariesList || [];
+
+  const listHtml = boundariesList
+    .map(
+      (details, index) => `
+      <div style="background: #ffffff90; padding: 8px; border-radius: 6px; border: 1px solid #00000010; margin-top: 6px;">
+        ${boundariesList.length > 1 ? `<div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">نطاق #${index + 1}</div>` : ""}
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; text-align: left;" dir="ltr">
+          <div><strong>URBANAREABOUNDARYNAME_AR:</strong> ${details.URBANAREABOUNDARYNAME_AR || "N/A"}</div>
+          <div><strong>URBANAREABOUNDARYYEAR:</strong> ${details.URBANAREABOUNDARYYEAR || "N/A"}</div>
+          <div><strong>URBANAREABOUNDARYCODE:</strong> ${details.URBANAREABOUNDARYCODE || "N/A"}</div>
+          <div><strong>URBANAREABOUNDARYTYPE:</strong> ${details.URBANAREABOUNDARYTYPE || "N/A"}</div>
+          <div><strong>URBANAREABOUNDARY_ID:</strong> ${details.URBANAREABOUNDARY_ID || "N/A"}</div>
+          <div><strong>URBANAREABOUNDARY_UNIFIED_ID:</strong> ${details.URBANAREABOUNDARY_UNIFIED_ID || "N/A"}</div>
+          <div><strong>NETAQ_CONDITION:</strong> ${details.NETAQ_CONDITION || "N/A"}</div>
+        </div>
+      </div>
+    `,
+    )
+    .join("");
+
   urbanAreaPanel.innerHTML = `
     <div style="padding: 12px; background: ${badgeBg}; border-radius: 8px; border: 1px solid ${badgeColor}40; font-size: 13px; direction: rtl; text-align: right;">
       
-      <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed ${badgeColor}50;">
-        <strong>موقف النطاق العمراني:</strong> 
-        <span style="color:${badgeColor}; font-weight:bold; font-size: 14px;">${urban.netaqCondition}</span>
+      <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed ${badgeColor}50; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong>موقف النطاق العمراني:</strong> 
+          <span style="color:${badgeColor}; font-weight:bold; font-size: 14px;">${urban.overallStatus}</span>
+        </div>
+        ${boundariesList.length > 1 ? `<span style="font-size: 11px; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #ccc;">العدد: ${boundariesList.length}</span>` : ""}
       </div>
       
       <div style="font-size: 12px; color: #444; margin-bottom: 10px;">${urban.message}</div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; background: #ffffff90; padding: 8px; border-radius: 6px; border: 1px solid #00000010; font-size: 12px;">
-        <div><strong>URBANAREABOUNDARYNAME_AR:</strong> ${details.URBANAREABOUNDARYNAME_AR || "N/A"}</div>
-        <div><strong>URBANAREABOUNDARYYEAR:</strong> ${details.URBANAREABOUNDARYYEAR || "N/A"}</div>
-        <div><strong>URBANAREABOUNDARYCODE:</strong> ${details.URBANAREABOUNDARYCODE || "N/A"}</div>
-        <div><strong>URBANAREABOUNDARYTYPE:</strong> ${details.URBANAREABOUNDARYTYPE || "N/A"}</div>
-        <div><strong>URBANAREABOUNDARY_ID:</strong> ${details.URBANAREABOUNDARY_ID || "N/A"}</div>
-        <div><strong>URBANAREABOUNDARY_UNIFIED_ID:</strong> ${details.URBANAREABOUNDARY_UNIFIED_ID || "N/A"}</div>
-      </div>
+      ${listHtml}
 
     </div>
   `;
