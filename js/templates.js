@@ -211,6 +211,7 @@ export function formatZoneOutput(detectedZone) {
 
 //* Draw Polygon (municipality or survey decision)
 //^ draw overlap
+//^ draw urbanArea
 export async function drawPolygon(
   view,
   polygon,
@@ -231,6 +232,10 @@ export async function drawPolygon(
     fillColor = [255, 0, 0, 0.55];
     outlineColor = [255, 0, 0, 1];
     outlineStyle = "solid";
+  } else if (contextType === "urbanArea") {
+    fillColor = [46, 125, 50, 0.4];
+    outlineColor = [46, 125, 50, 0.6];
+    outlineStyle = "short-dash";
   } else {
     fillColor = [255, 100, 0, 0.2];
     outlineColor = [255, 69, 0, 0.9];
@@ -1125,31 +1130,7 @@ export function requiredValidationsForDesignConcept(layers, rules = []) {
 }
 
 //!---------------------------------------------------------      النطاق العمراني -----------------------------------
-
-//* Combine and Check Boundary for Urban Area
-export function combineAndCheckBoundary(
-  targetGeometry,
-  features,
-  contextType = "النطاق العمراني",
-) {
-  if (!targetGeometry || !features || features.length === 0) {
-    return {
-      status: "outside",
-      message: `لا توجد عناصر تتقاطع مع حدود ${contextType}.`,
-    };
-  }
-
-  const { geometryEngine } = getEsriModules();
-
-  const geometries = features.map((f) => f.geometry).filter(Boolean);
-
-  const combinedGeom =
-    geometries.length === 1 ? geometries[0] : geometryEngine.union(geometries);
-
-  return checkContextBoundary(targetGeometry, combinedGeom, contextType);
-}
-
-//* Helper لعرض النطاق العمراني
+//* Helper لعرض النطاق العمراني المعتمد وقائمة النطاقات التفاعلية
 export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
   if (!urbanAreaPanel) return;
 
@@ -1174,13 +1155,38 @@ export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
         : "#ffebee";
 
   const boundariesList = urban.urbanBoundariesList || [];
+  const primaryFeature = boundariesList.length > 0 ? boundariesList[0] : null;
 
+  // netaq chk
+  const primaryHtml = primaryFeature
+    ? `
+    <div style="background: #ffffff; padding: 10px; border-radius: 6px; border: 2px solid ${badgeColor}; margin-top: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+      <div style="font-weight: bold; color: ${badgeColor}; font-size: 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+        <span>النطاق المعتمد للفحص (الأحدث - سنة ${primaryFeature.URBANAREABOUNDARYYEAR || "N/A"})</span>
+        <span style="background: ${badgeBg}; color: ${badgeColor}; padding: 2px 8px; border-radius: 4px; font-size: 11px;">النتيجة: ${urban.overallStatus}</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; font-size: 11.5px; text-align: left;" dir="ltr">
+        <div><strong>URBANAREABOUNDARYNAME_AR:</strong> ${primaryFeature.URBANAREABOUNDARYNAME_AR || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARYYEAR:</strong> ${primaryFeature.URBANAREABOUNDARYYEAR || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARYCODE:</strong> ${primaryFeature.URBANAREABOUNDARYCODE || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARYTYPE:</strong> ${primaryFeature.URBANAREABOUNDARYTYPE || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARY_ID:</strong> ${primaryFeature.URBANAREABOUNDARY_ID || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARY_UNIFIED_ID:</strong> ${primaryFeature.URBANAREABOUNDARY_UNIFIED_ID || "N/A"}</div>
+        <div><strong>NETAQ_CONDITION:</strong> ${primaryFeature.NETAQ_CONDITION || "N/A"}</div>
+      </div>
+    </div>
+    `
+    : "";
+
+  // list
   const listHtml = boundariesList
     .map(
       (details, index) => `
       <div style="background: #ffffff90; padding: 8px; border-radius: 6px; border: 1px solid #00000010; margin-top: 6px;">
-        ${boundariesList.length > 1 ? `<div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">نطاق #${index + 1}</div>` : ""}
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 12px; text-align: left;" dir="ltr">
+        <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px; color: #333;">
+          ${index === 0 ? "نطاق #1 (الأحدث - تم الفحص عليه)" : `نطاق #${index + 1}`}
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; font-size: 11.5px; text-align: left;" dir="ltr">
           <div><strong>URBANAREABOUNDARYNAME_AR:</strong> ${details.URBANAREABOUNDARYNAME_AR || "N/A"}</div>
           <div><strong>URBANAREABOUNDARYYEAR:</strong> ${details.URBANAREABOUNDARYYEAR || "N/A"}</div>
           <div><strong>URBANAREABOUNDARYCODE:</strong> ${details.URBANAREABOUNDARYCODE || "N/A"}</div>
@@ -1202,15 +1208,48 @@ export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
           <strong>موقف النطاق العمراني:</strong> 
           <span style="color:${badgeColor}; font-weight:bold; font-size: 14px;">${urban.overallStatus}</span>
         </div>
-        ${boundariesList.length > 1 ? `<span style="font-size: 11px; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #ccc;">العدد: ${boundariesList.length}</span>` : ""}
+        ${
+          boundariesList.length > 0
+            ? `<span style="font-size: 11px; background: #fff; padding: 2px 8px; border-radius: 4px; border: 1px solid #ccc; color: #444;">
+                إجمالي المتقاطعة: ${boundariesList.length}
+               </span>`
+            : ""
+        }
       </div>
       
-      <div style="font-size: 12px; color: #444; margin-bottom: 10px;">${urban.message}</div>
+      <div style="font-size: 12px; color: #444; margin-bottom: 6px;">${urban.message}</div>
 
-      ${listHtml}
+      ${primaryHtml}
+
+      ${
+        boundariesList.length > 0
+          ? `
+          <button id="toggleUrbanListBtn" style="width: 100%; margin-top: 10px; padding: 6px 12px; background: #ffffff; border: 1px solid ${badgeColor}80; color: ${badgeColor}; font-weight: bold; border-radius: 5px; cursor: pointer; font-size: 12px; transition: all 0.2s;">
+            ▼ إظهار قائمة جميع النطاقات المتقاطعة (${boundariesList.length})
+          </button>
+          
+          <div id="urbanListContainer" style="display: none; margin-top: 8px; max-height: 240px; overflow-y: auto; padding-left: 4px;">
+            ${listHtml}
+          </div>
+          `
+          : ""
+      }
 
     </div>
   `;
+
+  const toggleBtn = urbanAreaPanel.querySelector("#toggleUrbanListBtn");
+  const listContainer = urbanAreaPanel.querySelector("#urbanListContainer");
+
+  if (toggleBtn && listContainer) {
+    toggleBtn.addEventListener("click", () => {
+      const isHidden = listContainer.style.display === "none";
+      listContainer.style.display = isHidden ? "block" : "none";
+      toggleBtn.textContent = isHidden
+        ? `▲ إخفاء قائمة النطاقات (${boundariesList.length})`
+        : `▼ إظهار قائمة جميع النطاقات المتقاطعة (${boundariesList.length})`;
+    });
+  }
 
   urbanAreaPanel.style.display = "block";
 }

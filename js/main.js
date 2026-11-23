@@ -41,6 +41,7 @@ async function initializeApp() {
     //* step 1 --> fetch (municipality or survey decision)
     let activeContext = null;
     let activeLayer = null;
+    let activeUrbanLayer = null;
 
     let currentCombinedReport = null;
     let currentReprojectedLayers = null;
@@ -48,8 +49,10 @@ async function initializeApp() {
 
     fetchContextBtn.addEventListener("click", async () => {
       if (activeLayer) view.map.layers.remove(activeLayer);
+      if (activeUrbanLayer) view.map.layers.remove(activeUrbanLayer);
       activeContext = null;
       activeLayer = null;
+      activeUrbanLayer = null;
       urbanAreaPanel.style.display = "none";
 
       uploadSectionDiv.classList.add("disabled");
@@ -80,6 +83,11 @@ async function initializeApp() {
         if (activeContext) {
           //^ Draw Context polygon
           activeLayer = await business.drawContextPolygon(view, activeContext);
+          //^ Draw Urban Area polygon
+          activeUrbanLayer = await business.drawUrbanAreaPolygon(
+            view,
+            activeContext.urbanAreaInfo,
+          );
 
           uploadSectionDiv.classList.remove("disabled");
           fileInput.disabled = false;
@@ -88,7 +96,10 @@ async function initializeApp() {
             : "";
 
           //^ render Urban Area Info
-          templates.renderUrbanAreaInfo(activeContext.urbanAreaInfo , urbanAreaPanel);
+          templates.renderUrbanAreaInfo(
+            activeContext.urbanAreaInfo,
+            urbanAreaPanel,
+          );
 
           statusPanel.innerHTML = `<span style="color:green;">تم تحميل (${activeContext.name})${zoneMsg} - في انتظار رفع المخطط...</span>`;
         }
@@ -106,7 +117,8 @@ async function initializeApp() {
       statusPanel.textContent = "جاري الفحص المكاني...";
       const layersToRemove = [];
       view.map.layers.forEach((layer) => {
-        if (layer !== activeLayer) layersToRemove.push(layer);
+        if (layer !== activeLayer || layer !== activeUrbanLayer)
+          layersToRemove.push(layer);
       });
       view.map.removeMany(layersToRemove);
 

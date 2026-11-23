@@ -165,7 +165,7 @@ export async function drawContextPolygon(view, context) {
   );
 }
 
-//^ ----------------- Check Urban Area Boundary -----------------
+//* ----------------- Check Urban Area Boundary -----------------
 //*
 export async function checkUrbanAreaBoundary(surveyPolygon) {
   if (!surveyPolygon) return null;
@@ -200,10 +200,24 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
     };
   }
 
-  //^ chk inside or partial
-  const boundaryCheck = templates.combineAndCheckBoundary(
+  //^ sort (extract year number from URBANAREABOUNDARYYEAR and sort descending)
+  const extractYearNumber = (val) => {
+    if (!val) return 0;
+    const digits = String(val).replace(/\D/g, "");
+    return parseInt(digits, 10) || 0;
+  };
+  const sortedFeatures = [...intersectedFeatures].sort((a, b) => {
+    const yearA = extractYearNumber(a.attributes?.URBANAREABOUNDARYYEAR);
+    const yearB = extractYearNumber(b.attributes?.URBANAREABOUNDARYYEAR);
+    return yearB - yearA;
+  });
+
+  const latestFeature = sortedFeatures[0];
+
+  //^ chk
+  const boundaryCheck = templates.checkContextBoundary(
     surveyPolygon,
-    intersectedFeatures,
+    latestFeature.geometry,
     "النطاق العمراني",
   );
 
@@ -216,8 +230,7 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
     overallStatus = "خارج النطاق";
   }
 
-  //^ List of urban boundaries
-  const urbanBoundariesList = intersectedFeatures.map((f) => {
+  const urbanBoundariesList = sortedFeatures.map((f) => {
     const attrs = f.attributes || {};
     return {
       URBANAREABOUNDARY_ID: attrs.URBANAREABOUNDARY_ID,
@@ -232,12 +245,25 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
 
   return {
     overallStatus: overallStatus,
+    geometry: latestFeature.geometry,
     urbanBoundariesList: urbanBoundariesList,
     message:
       overallStatus === "داخل النطاق"
         ? "القرار المساحي يقع بالكامل داخل النطاق العمراني."
         : "جزء من القرار المساحي يقع خارج حدود النطاق العمراني.",
   };
+}
+//* ----------------- Draw Urban Area Polygon -----------------
+export async function drawUrbanAreaPolygon(view, urbanAreaInfo) {
+  if (!view || !urbanAreaInfo || !urbanAreaInfo.geometry) return null;
+
+  return await templates.drawPolygon(
+    view,
+    urbanAreaInfo.geometry,
+    "urbanArea",
+    "حدود النطاق العمراني المعتمد",
+    true,
+  );
 }
 
 //^ ----------------- Intersected Streets & City Info -----------------
