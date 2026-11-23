@@ -21,6 +21,7 @@ async function initializeApp() {
     const fileInput = document.getElementById("shpFileInput");
     const statisticsPanel = document.getElementById("jsonViewer");
     const statusPanel = document.getElementById("validationViewer");
+    const urbanAreaPanel = document.getElementById("urbanAreaViewer");
     const uploadSectionDiv = document.getElementById("uploadSectionDiv");
     const radioMuni = document.getElementById("radioMuni");
     const radioDecision = document.getElementById("radioDecision");
@@ -49,6 +50,7 @@ async function initializeApp() {
       if (activeLayer) view.map.layers.remove(activeLayer);
       activeContext = null;
       activeLayer = null;
+      urbanAreaPanel.style.display = "none";
 
       uploadSectionDiv.classList.add("disabled");
       fileInput.disabled = true;
@@ -84,6 +86,10 @@ async function initializeApp() {
           const zoneMsg = activeContext.zone
             ? ` - النطاق: <b>Zone ${activeContext.zone.number}</b>`
             : "";
+
+          //^ render Urban Area Info
+          templates.renderUrbanAreaInfo(activeContext.urbanAreaInfo , urbanAreaPanel);
+
           statusPanel.innerHTML = `<span style="color:green;">تم تحميل (${activeContext.name})${zoneMsg} - في انتظار رفع المخطط...</span>`;
         }
       } catch (err) {
@@ -249,6 +255,7 @@ async function initializeApp() {
         fileInput.value = "";
       }
     });
+
     //* step 3 --> Map click event for parcel selection
     view.on("click", async (event) => {
       //^ get parcel details

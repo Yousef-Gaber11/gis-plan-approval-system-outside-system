@@ -112,10 +112,12 @@ export async function intersectBureQuery(
   targetGeometry,
   searchLayer,
   outFields = ["*"],
+  whereClause = "1=1",
 ) {
   const result = await searchLayer.queryFeatures({
     geometry: targetGeometry,
     spatialRelationship: "intersects",
+    where: whereClause,
     outFields: outFields,
     returnGeometry: true,
   });
@@ -1120,4 +1122,77 @@ export function requiredValidationsForDesignConcept(layers, rules = []) {
   //*------------------
 
   return { isValid: true, warnings };
+}
+
+//!---------------------------------------------------------      النطاق العمراني -----------------------------------
+
+//* Combine and Check Boundary for Urban Area
+export function combineAndCheckBoundary(
+  targetGeometry,
+  features,
+  contextType = "النطاق العمراني",
+) {
+  if (!targetGeometry || !features || features.length === 0) {
+    return {
+      status: "outside",
+      message: `لا توجد عناصر تتقاطع مع حدود ${contextType}.`,
+    };
+  }
+
+  const { geometryEngine } = getEsriModules();
+
+  const geometries = features.map((f) => f.geometry).filter(Boolean);
+
+  const combinedGeom =
+    geometries.length === 1 ? geometries[0] : geometryEngine.union(geometries);
+
+  return checkContextBoundary(targetGeometry, combinedGeom, contextType);
+}
+
+//* Helper لعرض النطاق العمراني
+export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
+  if (!urban) {
+    urbanAreaPanel.style.display = "none";
+    urbanAreaPanel.innerHTML = "";
+    return;
+  }
+
+  const badgeColor =
+    urban.netaqCondition === "داخل النطاق"
+      ? "#2e7d32"
+      : urban.netaqCondition === "جزء داخل وجزء خارج"
+        ? "#ed6c02"
+        : "#d32f2f";
+
+  const badgeBg =
+    urban.netaqCondition === "داخل النطاق"
+      ? "#e8f5e9"
+      : urban.netaqCondition === "جزء داخل وجزء خارج"
+        ? "#fff3e0"
+        : "#ffebee";
+
+  const details = urban.urbanAreaDetails;
+  urbanAreaPanel.innerHTML = `
+    <div style="padding: 12px; background: ${badgeBg}; border-radius: 8px; border: 1px solid ${badgeColor}40; font-size: 13px; direction: rtl; text-align: right;">
+      
+      <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed ${badgeColor}50;">
+        <strong>موقف النطاق العمراني:</strong> 
+        <span style="color:${badgeColor}; font-weight:bold; font-size: 14px;">${urban.netaqCondition}</span>
+      </div>
+      
+      <div style="font-size: 12px; color: #444; margin-bottom: 10px;">${urban.message}</div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; background: #ffffff90; padding: 8px; border-radius: 6px; border: 1px solid #00000010; font-size: 12px;">
+        <div><strong>URBANAREABOUNDARYNAME_AR:</strong> ${details.URBANAREABOUNDARYNAME_AR || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARYYEAR:</strong> ${details.URBANAREABOUNDARYYEAR || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARYCODE:</strong> ${details.URBANAREABOUNDARYCODE || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARYTYPE:</strong> ${details.URBANAREABOUNDARYTYPE || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARY_ID:</strong> ${details.URBANAREABOUNDARY_ID || "N/A"}</div>
+        <div><strong>URBANAREABOUNDARY_UNIFIED_ID:</strong> ${details.URBANAREABOUNDARY_UNIFIED_ID || "N/A"}</div>
+      </div>
+
+    </div>
+  `;
+
+  urbanAreaPanel.style.display = "block";
 }

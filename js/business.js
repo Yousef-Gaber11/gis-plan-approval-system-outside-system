@@ -14,6 +14,9 @@ const STREETS_SERVICE_URL =
 const CITIES_SERVICE_URL =
   "https://gisstg227.momra.gov.sa/arcgis/rest/services/Bundaries/Cities/MapServer/0";
 
+const URBAN_AREA_SERVICE_URL =
+  "https://netaqgis.momra.gov.sa/arcgis/rest/services/NetaqWithHaizService/MapServer/0";
+
 //!----------------- Design Concept Rules -----------------
 const DESIGN_CONCEPT_RULES = [
   {
@@ -124,10 +127,15 @@ export async function getSurveyDecision(krokino) {
       [{ geometry: decisionPolygon }],
       finalZone.wkid,
     );
+
   //^ Calc Area
   const calculatedArea = Math.abs(
     templates.calculateProjectedArea(metricGeometry),
   );
+
+  //^ ----------------  فحص النطاق العمراني ----------------
+  const urbanAreaInfo = await checkUrbanAreaBoundary(geoGeometry);
+  //^ --------------------------------------------------------
 
   return {
     type: "decision",
@@ -137,6 +145,7 @@ export async function getSurveyDecision(krokino) {
     polygon: geoGeometry,
     metricPolygon: metricGeometry,
     zone: finalZone,
+    urbanAreaInfo: urbanAreaInfo,
     attributes: attrs,
   };
 }
@@ -154,6 +163,77 @@ export async function drawContextPolygon(view, context) {
     context.type,
     title,
   );
+}
+
+//^ ----------------- Check Urban Area Boundary -----------------
+//*
+export async function checkUrbanAreaBoundary(surveyPolygon) {
+  if (!surveyPolygon) return null;
+
+  const urbanAreaLayer = templates.createServiceFeatureLayer(
+    URBAN_AREA_SERVICE_URL,
+  );
+
+  const outFields = [
+    "URBANAREABOUNDARY_ID",
+    "URBANAREABOUNDARYCODE",
+    "URBANAREABOUNDARYTYPE",
+    "URBANAREABOUNDARYNAME_AR",
+    "URBANAREABOUNDARYYEAR",
+    "NETAQ_CONDITION",
+    "URBANAREABOUNDARY_UNIFIED_ID",
+  ];
+
+  //^ Query
+  const intersectedFeatures = await templates.intersectBureQuery(
+    surveyPolygon,
+    urbanAreaLayer,
+    outFields,
+    "URBANAREABOUNDARYTYPE = 3",
+  );
+
+  if (!intersectedFeatures || intersectedFeatures.length === 0) {
+    return {
+      netaqCondition: "خارج النطاق",
+      urbanAreaDetails: null,
+      message: "القرار المساحي يقع بالكامل خارج النطاق العمراني المعتمد.",
+    };
+  }
+
+  //^ chk inside or partial
+  const boundaryCheck = templates.combineAndCheckBoundary(
+    surveyPolygon,
+    intersectedFeatures,
+    "النطاق العمراني",
+  );
+
+  let netaqCondition = "";
+  if (boundaryCheck.status === "inside") {
+    netaqCondition = "داخل النطاق";
+  } else if (boundaryCheck.status === "partial") {
+    netaqCondition = "جزء داخل وجزء خارج";
+  } else {
+    netaqCondition = "خارج النطاق";
+  }
+
+  const targetAttrs = intersectedFeatures[0].attributes || {};
+
+  return {
+    netaqCondition: netaqCondition,
+    urbanAreaDetails: {
+      URBANAREABOUNDARY_ID: targetAttrs.URBANAREABOUNDARY_ID,
+      URBANAREABOUNDARYCODE: targetAttrs.URBANAREABOUNDARYCODE,
+      URBANAREABOUNDARYTYPE: targetAttrs.URBANAREABOUNDARYTYPE,
+      URBANAREABOUNDARYNAME_AR: targetAttrs.URBANAREABOUNDARYNAME_AR,
+      URBANAREABOUNDARYYEAR: targetAttrs.URBANAREABOUNDARYYEAR,
+      NETAQ_CONDITION: netaqCondition,
+      URBANAREABOUNDARY_UNIFIED_ID: targetAttrs.URBANAREABOUNDARY_UNIFIED_ID,
+    },
+    message:
+      netaqCondition === "داخل النطاق"
+        ? "القرار المساحي يقع بالكامل داخل النطاق العمراني."
+        : "جزء من القرار المساحي يقع خارج حدود النطاق العمراني.",
+  };
 }
 
 //^ ----------------- Intersected Streets & City Info -----------------
