@@ -154,15 +154,19 @@ export async function getSurveyDecision(krokino) {
 export async function drawContextPolygon(view, context) {
   if (!view || !context || !context.polygon) return null;
 
-  const title =
-    context.type === "decision" ? "حدود القرار المساحي" : "حدود البلدية";
+  const isDecision = context.type === "decision";
+  const title = isDecision ? "حدود القرار المساحي" : "حدود البلدية";
 
-  return await templates.drawPolygon(
-    view,
-    context.polygon,
-    context.type,
+  return await templates.drawPolygon(view, context.polygon, {
     title,
-  );
+    fillColor: isDecision ? [0, 150, 255, 0.2] : [255, 100, 0, 0.2],
+    outlineColor: isDecision ? [0, 100, 255, 0.9] : [255, 69, 0, 0.9],
+    outlineStyle: "dash",
+    outlineWidth: 2.5,
+    index: 0,
+    skipZoom: false,
+    zoomExpand: 1.3,
+  });
 }
 
 //* ----------------- Check Urban Area Boundary -----------------
@@ -213,6 +217,7 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
   });
 
   const latestFeature = sortedFeatures[0];
+  // console.log("Rings count:", latestFeature.geometry.rings?.length);
 
   //^ chk
   const boundaryCheck = templates.checkContextBoundary(
@@ -257,13 +262,15 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
 export async function drawUrbanAreaPolygon(view, urbanAreaInfo) {
   if (!view || !urbanAreaInfo || !urbanAreaInfo.geometry) return null;
 
-  return await templates.drawPolygon(
-    view,
-    urbanAreaInfo.geometry,
-    "urbanArea",
-    "حدود النطاق العمراني المعتمد",
-    true,
-  );
+  return await templates.drawPolygon(view, urbanAreaInfo.geometry, {
+    title: "حدود النطاق العمراني المعتمد",
+    fillColor: [0, 0, 0, 0],
+    outlineColor: [46, 125, 50, 0.9],
+    outlineStyle: "short-dash",
+    outlineWidth: 2.5,
+    index: 1,
+    skipZoom: true,
+  });
 }
 
 //^ ----------------- Intersected Streets & City Info -----------------
@@ -589,6 +596,40 @@ export async function processPlan(rawLayers, activeContext) {
     return processMunicipalityPlan(rawLayers, activeContext);
   }
   return processDecisionPlan(rawLayers, activeContext);
+}
+
+//^ ----------------- Draw Design Warnings -----------------
+export async function drawDesignWarnings(view, designWarnings) {
+  if (!view || !designWarnings || designWarnings.length === 0) return;
+
+  let combinedExtent = null;
+
+  for (const warn of designWarnings) {
+    if (warn.polygon) {
+      await templates.drawPolygon(view, warn.polygon, {
+        title: `تداخل مكاني - ${warn.layerName}`,
+        fillColor: [255, 0, 0, 0.55],
+        outlineColor: [255, 0, 0, 1],
+        outlineStyle: "solid",
+        outlineWidth: 2.5,
+        skipZoom: true,
+      });
+
+      if (warn.polygon.extent) {
+        combinedExtent = combinedExtent
+          ? combinedExtent.union(warn.polygon.extent)
+          : warn.polygon.extent.clone();
+      }
+    }
+  }
+
+  if (combinedExtent) {
+    await view.goTo(combinedExtent.expand(1.6), {
+      animate: true,
+      easing: "ease-in-out",
+      duration: 1200,
+    });
+  }
 }
 
 //^ ----------------- Get District Name -----------------

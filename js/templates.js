@@ -212,56 +212,48 @@ export function formatZoneOutput(detectedZone) {
 //* Draw Polygon (municipality or survey decision)
 //^ draw overlap
 //^ draw urbanArea
-export async function drawPolygon(
-  view,
-  polygon,
-  contextType,
-  title,
-  skipZoom = false,
-) {
+//* Draw Generic Polygon
+export async function drawPolygon(view, polygon, options = {}) {
   const { GraphicsLayer, Graphic } = getEsriModules();
 
-  const layer = new GraphicsLayer({ title: title });
+  const {
+    title = "طبقة مضلع",
+    fillColor = [0, 0, 0, 0],
+    outlineColor = [0, 0, 0, 1],
+    outlineWidth = 2.5,
+    outlineStyle = "solid",
+    index = undefined,
+    skipZoom = false,
+    zoomExpand = 1.3,
+  } = options;
 
-  let fillColor, outlineColor, outlineStyle;
-  if (contextType === "decision") {
-    fillColor = [0, 150, 255, 0.2];
-    outlineColor = [0, 100, 255, 0.9];
-    outlineStyle = "dash";
-  } else if (contextType === "overlap") {
-    fillColor = [255, 0, 0, 0.55];
-    outlineColor = [255, 0, 0, 1];
-    outlineStyle = "solid";
-  } else if (contextType === "urbanArea") {
-    fillColor = [46, 125, 50, 0.4];
-    outlineColor = [46, 125, 50, 0.6];
-    outlineStyle = "short-dash";
-  } else {
-    fillColor = [255, 100, 0, 0.2];
-    outlineColor = [255, 69, 0, 0.9];
-    outlineStyle = "dash";
-  }
+  const layer = new GraphicsLayer({ title });
+
   const graphic = new Graphic({
     geometry: polygon,
     symbol: {
       type: "simple-fill",
       color: fillColor,
-      outline: { color: outlineColor, width: 2.5, style: "dash" },
+      outline: {
+        color: outlineColor,
+        width: outlineWidth,
+        style: outlineStyle,
+      },
     },
     attributes: { Name: title },
   });
 
   layer.add(graphic);
 
-  if (contextType === "overlap") {
-    view.map.add(layer);
+  if (typeof index === "number") {
+    view.map.add(layer, index);
   } else {
-    view.map.add(layer, 0);
+    view.map.add(layer);
   }
 
   if (!skipZoom && polygon.extent) {
     await view.when();
-    await view.goTo(polygon.extent.expand(1.3), {
+    await view.goTo(polygon.extent.expand(zoomExpand), {
       animate: true,
       easing: "linear",
       duration: 1200,

@@ -117,7 +117,7 @@ async function initializeApp() {
       statusPanel.textContent = "جاري الفحص المكاني...";
       const layersToRemove = [];
       view.map.layers.forEach((layer) => {
-        if (layer !== activeLayer || layer !== activeUrbanLayer)
+        if (layer !== activeLayer && layer !== activeUrbanLayer)
           layersToRemove.push(layer);
       });
       view.map.removeMany(layersToRemove);
@@ -233,31 +233,7 @@ async function initializeApp() {
 
         //* draw warnings polygons on the map
         if (designWarnings && designWarnings.length > 0) {
-          let combinedExtent = null;
-
-          for (const warn of designWarnings) {
-            if (warn.polygon) {
-              await templates.drawPolygon(
-                view,
-                warn.polygon,
-                "overlap",
-                `تداخل مكاني - ${warn.layerName}`,
-                true,
-              );
-              if (warn.polygon.extent) {
-                combinedExtent = combinedExtent
-                  ? combinedExtent.union(warn.polygon.extent)
-                  : warn.polygon.extent.clone();
-              }
-            }
-          }
-          if (combinedExtent) {
-            await view.goTo(combinedExtent.expand(1.6), {
-              animate: true,
-              easing: "ease-in-out",
-              duration: 1200,
-            });
-          }
+          await business.drawDesignWarnings(view, designWarnings);
         }
       } catch (err) {
         console.error(err);
