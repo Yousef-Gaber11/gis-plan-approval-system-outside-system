@@ -115,9 +115,17 @@ async function initializeApp() {
       if (!file) return;
       statisticsPanel.textContent = "جاري رفع ومعالجة الملف على السيرفر...";
       statusPanel.textContent = "جاري الفحص المكاني...";
+
+      const isContextLayer = (layer) => {
+        if (!activeLayer) return false;
+        return Array.isArray(activeLayer)
+          ? activeLayer.includes(layer)
+          : layer === activeLayer;
+      };
+
       const layersToRemove = [];
       view.map.layers.forEach((layer) => {
-        if (layer !== activeLayer && layer !== activeUrbanLayer)
+        if (!isContextLayer(layer) && layer !== activeUrbanLayer)
           layersToRemove.push(layer);
       });
       view.map.removeMany(layersToRemove);

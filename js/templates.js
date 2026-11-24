@@ -1122,6 +1122,61 @@ export function requiredValidationsForDesignConcept(layers, rules = []) {
 }
 
 //!---------------------------------------------------------      النطاق العمراني -----------------------------------
+
+//!-------------------------------------------      Spatial Split & Math Calculations        -----------------------------------
+
+export async function calculateUrbanBoundarySplit(
+  surveyPolygon,
+  urbanPolygon,
+  targetWkid,
+) {
+  if (!surveyPolygon || !urbanPolygon) return null;
+
+  const { geometryEngine } = getEsriModules();
+
+  //? Intersection & Difference
+  const insideGeometry = geometryEngine.intersect(surveyPolygon, urbanPolygon);
+  const outsideGeometry = geometryEngine.difference(
+    surveyPolygon,
+    urbanPolygon,
+  );
+
+  let insideArea = 0;
+  let outsideArea = 0;
+
+  //? (UTM) -> zone & calc area
+  if (insideGeometry) {
+    const [{ geometryUTM: insideUTM }] = await reprojectFeatures(
+      [{ geometry: insideGeometry }],
+      targetWkid,
+    );
+    insideArea = round2(Math.abs(calculateProjectedArea(insideUTM)));
+  }
+  if (outsideGeometry) {
+    const [{ geometryUTM: outsideUTM }] = await reprojectFeatures(
+      [{ geometry: outsideGeometry }],
+      targetWkid,
+    );
+    outsideArea = round2(Math.abs(calculateProjectedArea(outsideUTM)));
+  }
+
+  //? calc percentage
+  const totalArea = insideArea + outsideArea;
+  const insidePercentage =
+    totalArea > 0 ? round2((insideArea / totalArea) * 100) : 0;
+  const outsidePercentage =
+    totalArea > 0 ? round2((outsideArea / totalArea) * 100) : 0;
+
+  return {
+    insideGeometry,
+    outsideGeometry,
+    insideArea,
+    outsideArea,
+    insidePercentage,
+    outsidePercentage,
+  };
+}
+
 //* Helper لعرض النطاق العمراني المعتمد وقائمة النطاقات التفاعلية
 export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
   if (!urbanAreaPanel) return;
@@ -1148,6 +1203,7 @@ export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
 
   const boundariesList = urban.urbanBoundariesList || [];
   const primaryFeature = boundariesList.length > 0 ? boundariesList[0] : null;
+  const split = urban.splitAnalysis || {};
 
   // netaq chk
   const primaryHtml = primaryFeature
@@ -1192,6 +1248,39 @@ export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
     )
     .join("");
 
+  // split stats
+  const splitStatsHtml =
+    split.insideArea || split.outsideArea
+      ? `
+    <div style="margin-top: 10px; background: #ffffff; padding: 10px; border-radius: 6px; border: 1px solid #00000015; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+      
+      <div style="font-size: 12px; font-weight: bold; color: #333; margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">
+        <span>تحليل مساحة القرار المساحي بالنسبة للنطاق:</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        
+        <div style="background: #e8f5e9; border: 1px solid #81c784; padding: 8px; border-radius: 6px; text-align: center;">
+          <div style="color: #2e7d32; font-weight: bold; font-size: 11px;">مساحة القرار داخل النطاق</div>
+          <div style="font-size: 13px; font-weight: bold; color: #1b5e20; margin: 3px 0;" dir="ltr">
+            ${(split.insideArea || 0).toLocaleString("en-US")} م²
+          </div>
+          <div style="font-size: 11px; color: #388e3c; font-weight: bold;">(${split.insidePercentage || 0}% من القرار)</div>
+        </div>
+
+        <div style="background: #ffebee; border: 1px solid #e57373; padding: 8px; border-radius: 6px; text-align: center;">
+          <div style="color: #c62828; font-weight: bold; font-size: 11px;">مساحة القرار خارج النطاق</div>
+          <div style="font-size: 13px; font-weight: bold; color: #b71c1c; margin: 3px 0;" dir="ltr">
+            ${(split.outsideArea || 0).toLocaleString("en-US")} م²
+          </div>
+          <div style="font-size: 11px; color: #d32f2f; font-weight: bold;">(${split.outsidePercentage || 0}% من القرار)</div>
+        </div>
+
+      </div>
+    </div>
+  `
+      : "";
+
   urbanAreaPanel.innerHTML = `
     <div style="padding: 12px; background: ${badgeBg}; border-radius: 8px; border: 1px solid ${badgeColor}40; font-size: 13px; direction: rtl; text-align: right;">
       
@@ -1210,6 +1299,8 @@ export function renderUrbanAreaInfo(urban, urbanAreaPanel) {
       </div>
       
       <div style="font-size: 12px; color: #444; margin-bottom: 6px;">${urban.message}</div>
+
+      ${splitStatsHtml}
 
       ${primaryHtml}
 

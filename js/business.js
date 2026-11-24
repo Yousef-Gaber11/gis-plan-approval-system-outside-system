@@ -134,7 +134,10 @@ export async function getSurveyDecision(krokino) {
   );
 
   //^ ----------------  فحص النطاق العمراني ----------------
-  const urbanAreaInfo = await checkUrbanAreaBoundary(geoGeometry);
+  const urbanAreaInfo = await checkUrbanAreaBoundary(
+    geoGeometry,
+    finalZone.wkid,
+  );
   //^ --------------------------------------------------------
 
   return {
@@ -155,12 +158,45 @@ export async function drawContextPolygon(view, context) {
   if (!view || !context || !context.polygon) return null;
 
   const isDecision = context.type === "decision";
-  const title = isDecision ? "حدود القرار المساحي" : "حدود البلدية";
+
+  if (isDecision && context.urbanAreaInfo?.splitAnalysis) {
+    const { insideGeometry, outsideGeometry } =
+      context.urbanAreaInfo.splitAnalysis;
+    const layers = [];
+
+    if (insideGeometry) {
+      const insideLayer = await templates.drawPolygon(view, insideGeometry, {
+        title: "القرار المساحي - داخل النطاق",
+        fillColor: [76, 175, 80, 0.35],
+        outlineColor: [46, 125, 50, 0.9],
+        outlineStyle: "solid",
+        outlineWidth: 2.5,
+        index: 0,
+        skipZoom: false,
+      });
+      layers.push(insideLayer);
+    }
+
+    if (outsideGeometry) {
+      const outsideLayer = await templates.drawPolygon(view, outsideGeometry, {
+        title: "القرار المساحي - خارج النطاق",
+        fillColor: [244, 67, 54, 0.35],
+        outlineColor: [211, 47, 47, 0.9],
+        outlineStyle: "solid",
+        outlineWidth: 2.5,
+        index: 0,
+        skipZoom: true,
+      });
+      layers.push(outsideLayer);
+    }
+
+    return layers;
+  }
 
   return await templates.drawPolygon(view, context.polygon, {
-    title,
-    fillColor: isDecision ? [0, 150, 255, 0.2] : [255, 100, 0, 0.2],
-    outlineColor: isDecision ? [0, 100, 255, 0.9] : [255, 69, 0, 0.9],
+    title: "حدود البلدية",
+    fillColor: [255, 100, 0, 0.2],
+    outlineColor: [255, 69, 0, 0.9],
     outlineStyle: "dash",
     outlineWidth: 2.5,
     index: 0,
@@ -171,7 +207,7 @@ export async function drawContextPolygon(view, context) {
 
 //* ----------------- Check Urban Area Boundary -----------------
 //*
-export async function checkUrbanAreaBoundary(surveyPolygon) {
+export async function checkUrbanAreaBoundary(surveyPolygon, targetWkid) {
   if (!surveyPolygon) return null;
 
   const urbanAreaLayer = templates.createServiceFeatureLayer(
@@ -235,6 +271,13 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
     overallStatus = "خارج النطاق";
   }
 
+  //^ Split Analysis
+  const splitAnalysis = await templates.calculateUrbanBoundarySplit(
+    surveyPolygon,
+    latestFeature.geometry,
+    targetWkid,
+  );
+
   const urbanBoundariesList = sortedFeatures.map((f) => {
     const attrs = f.attributes || {};
     return {
@@ -251,6 +294,7 @@ export async function checkUrbanAreaBoundary(surveyPolygon) {
   return {
     overallStatus: overallStatus,
     geometry: latestFeature.geometry,
+    splitAnalysis,
     urbanBoundariesList: urbanBoundariesList,
     message:
       overallStatus === "داخل النطاق"
@@ -265,7 +309,7 @@ export async function drawUrbanAreaPolygon(view, urbanAreaInfo) {
   return await templates.drawPolygon(view, urbanAreaInfo.geometry, {
     title: "حدود النطاق العمراني المعتمد",
     fillColor: [0, 0, 0, 0],
-    outlineColor: [46, 125, 50, 0.9],
+    outlineColor: [46, 125, 50, 1],
     outlineStyle: "short-dash",
     outlineWidth: 2.5,
     index: 1,
