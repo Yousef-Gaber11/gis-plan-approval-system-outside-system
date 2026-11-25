@@ -21,7 +21,7 @@ async function initializeApp() {
     const fileInput = document.getElementById("shpFileInput");
     const statisticsPanel = document.getElementById("jsonViewer");
     const statusPanel = document.getElementById("validationViewer");
-    const urbanAreaPanel = document.getElementById("urbanAreaViewer");
+    const planValidationPanel = document.getElementById("planValidationViewer");
     const uploadSectionDiv = document.getElementById("uploadSectionDiv");
     const radioMuni = document.getElementById("radioMuni");
     const radioDecision = document.getElementById("radioDecision");
@@ -53,7 +53,7 @@ async function initializeApp() {
       activeContext = null;
       activeLayer = null;
       activeUrbanLayer = null;
-      urbanAreaPanel.style.display = "none";
+      templates.renderPlanValidation(null, planValidationPanel);
 
       uploadSectionDiv.classList.add("disabled");
       fileInput.disabled = true;
@@ -95,11 +95,10 @@ async function initializeApp() {
             ? ` - النطاق: <b>Zone ${activeContext.zone.number}</b>`
             : "";
 
-          //^ render Urban Area Info
-          templates.renderUrbanAreaInfo(
-            activeContext.urbanAreaInfo,
-            urbanAreaPanel,
-          );
+          //^ Render Report planValidation
+          const reportToRender =
+            activeContext.muniReport || activeContext.decisionReport;
+          templates.renderPlanValidation(reportToRender, planValidationPanel);
 
           statusPanel.innerHTML = `<span style="color:green;">تم تحميل (${activeContext.name})${zoneMsg} - في انتظار رفع المخطط...</span>`;
         }
@@ -220,7 +219,6 @@ async function initializeApp() {
 
         //^ Render Report (statistics + ideaValidation)
         const combinedReport = {
-          planValidation: planValidation,
           ideaValidation: ideaValidation,
           statistics: statistics,
         };

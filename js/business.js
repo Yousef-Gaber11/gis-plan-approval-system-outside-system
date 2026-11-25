@@ -17,6 +17,43 @@ const CITIES_SERVICE_URL =
 const URBAN_AREA_SERVICE_URL =
   "https://netaqgis.momra.gov.sa/arcgis/rest/services/NetaqWithHaizService/MapServer/0";
 
+const RED_ZONES_SERVICE_URL =
+  "https://gisstg227.momra.gov.sa/arcgis/rest/services/NonBalady/Restrictions/MapServer";
+
+const RED_ZONE_LAYERS_CONFIG = [
+  { id: 0, name: "SDE.SEA", message: "المخطط يتقاطع مع المناطق البحرية" },
+  {
+    id: 1,
+    name: "SDE.HaramBoundary",
+    message: "المخطط يتقاطع مع حدود الحرم",
+  },
+  {
+    id: 2,
+    name: "SDE.RedZonesArea",
+    message: "المخطط يتقاطع مع مساحات المناطق الحمراء",
+  },
+  {
+    id: 3,
+    name: "SDE.UrbanRedZones",
+    message: "المخطط يتقاطع مع مناطق العمران الحمراء",
+  },
+  {
+    id: 4,
+    name: "SDE.InternationalBoundaryBuffer",
+    message: "المخطط يتقاطع مع النطاق الحدودي الدولي",
+  },
+  {
+    id: 5,
+    name: "SDE.RedZone",
+    message: "المخطط يتقاطع مع المناطق المحظورة",
+  },
+  {
+    id: 6,
+    name: "SDE.AramcoRedZone",
+    message: "المخطط يتقاطع مع مناطق حظر أرامكو",
+  },
+];
+
 //!----------------- Design Concept Rules -----------------
 const DESIGN_CONCEPT_RULES = [
   {
@@ -67,142 +104,62 @@ async function getZone(polygon) {
   return templates.formatZoneOutput(detectedZoneCode);
 }
 
-// * ----------------- Get Municipality -----------------
-export async function getMunicipality(code = MUNICIPALITY_CODE) {
-  //^َ Query
-  const feature = await templates.fetchBureQuery(
-    MUNI_SERVICE_URL,
-    `MUNICIPALITYUNIQUECODE = '${code}'`,
-    ["MUNICIPALITYARNAME", "AMANA"],
-    `لم يتم العثور على بيانات البلدية بالكود: ${code}`,
+//^ -----------------  Streets & City Info & UrbanArea & NonBalady -----------------
+
+//* ----------------- Get Intersected Streets -----------------
+export async function getIntersectedStreets(surveyPolygon, targetWkid) {
+  if (!surveyPolygon) return { formattedStreets: [], rawStreetFeatures: [] };
+
+  const streetsLayer = templates.createServiceFeatureLayer(STREETS_SERVICE_URL);
+
+  const intersectingFeatures = await templates.intersectBureQuery(
+    surveyPolygon,
+    streetsLayer,
+    ["STREETNAME", "STREETTYPE"],
   );
 
-  const attrs = feature.attributes;
-  const muniPolygon = feature.geometry;
-
-  //^َ Zone
-  const zone = await getZone(muniPolygon);
-  if (!zone) {
-    throw new Error(
-      "تعذر استنتاج الزون، حدود البلدية قد تقع خارج النطاقات المعتمدة.",
-    );
-  }
-
-  return {
-    type: "municipality",
-    code: code,
-    name:
-      (attrs.MUNICIPALITYARNAME || "") +
-      (attrs.AMANA ? " - " + attrs.AMANA : ""),
-    polygon: muniPolygon,
-    zone: zone,
-    attributes: attrs,
-  };
-}
-
-// * ----------------- Get Survey Decision -----------------
-export async function getSurveyDecision(krokino) {
-  //^ Query
-  const feature = await templates.fetchBureQuery(
-    SURVEY_DECISION_URL,
-    `KROKINO = '${krokino}' and KROKITYPE='7018' and ISAPPROVED = 1`,
-    ["KROKINO"],
-    `لم يتم العثور على قرار مساحي معتمد مطابق للرقم: ${krokino}`,
+  const projectedStreets = await templates.reprojectFeatures(
+    intersectingFeatures,
+    targetWkid,
+    "",
+    "geometryUTM",
   );
 
-  const attrs = feature.attributes;
-  const decisionPolygon = feature.geometry;
-
-  //^ Zone
-  const finalZone = await getZone(decisionPolygon);
-  if (!finalZone) {
-    throw new Error(
-      "تعذر استنتاج الزون، القرار المساحي قد يقع خارج النطاقات المعتمدة.",
-    );
-  }
-
-  //^ Projection
-  const [{ esriGeometry: geoGeometry, geometryUTM: metricGeometry }] =
-    await templates.reprojectFeatures(
-      [{ geometry: decisionPolygon }],
-      finalZone.wkid,
-    );
-
-  //^ Calc Area
-  const calculatedArea = Math.abs(
-    templates.calculateProjectedArea(metricGeometry),
-  );
-
-  //^ ----------------  فحص النطاق العمراني ----------------
-  const urbanAreaInfo = await checkUrbanAreaBoundary(
-    geoGeometry,
-    finalZone.wkid,
-  );
-  //^ --------------------------------------------------------
-
-  return {
-    type: "decision",
-    code: krokino,
-    name: `القرار المساحي: ${krokino}`,
-    landArea: calculatedArea,
-    polygon: geoGeometry,
-    metricPolygon: metricGeometry,
-    zone: finalZone,
-    urbanAreaInfo: urbanAreaInfo,
-    attributes: attrs,
-  };
-}
-
-//*------------------ Draw polygon (Municipality, Survey Decision) -----------------
-export async function drawContextPolygon(view, context) {
-  if (!view || !context || !context.polygon) return null;
-
-  const isDecision = context.type === "decision";
-
-  if (isDecision && context.urbanAreaInfo?.splitAnalysis) {
-    const { insideGeometry, outsideGeometry } =
-      context.urbanAreaInfo.splitAnalysis;
-    const layers = [];
-
-    if (insideGeometry) {
-      const insideLayer = await templates.drawPolygon(view, insideGeometry, {
-        title: "القرار المساحي - داخل النطاق",
-        fillColor: [76, 175, 80, 0.35],
-        outlineColor: [46, 125, 50, 0.9],
-        outlineStyle: "solid",
-        outlineWidth: 2.5,
-        index: 0,
-        skipZoom: false,
-      });
-      layers.push(insideLayer);
-    }
-
-    if (outsideGeometry) {
-      const outsideLayer = await templates.drawPolygon(view, outsideGeometry, {
-        title: "القرار المساحي - خارج النطاق",
-        fillColor: [244, 67, 54, 0.35],
-        outlineColor: [211, 47, 47, 0.9],
-        outlineStyle: "solid",
-        outlineWidth: 2.5,
-        index: 0,
-        skipZoom: true,
-      });
-      layers.push(outsideLayer);
-    }
-
-    return layers;
-  }
-
-  return await templates.drawPolygon(view, context.polygon, {
-    title: "حدود البلدية",
-    fillColor: [255, 100, 0, 0.2],
-    outlineColor: [255, 69, 0, 0.9],
-    outlineStyle: "dash",
-    outlineWidth: 2.5,
-    index: 0,
-    skipZoom: false,
-    zoomExpand: 1.3,
+  const formattedStreets = intersectingFeatures.map((f) => {
+    const attrs = f.attributes || {};
+    return {
+      streetType: attrs.STREETTYPE || "لا يوجد",
+      streetName: attrs.STREETNAME || "لا يوجد",
+    };
   });
+
+  return {
+    formattedStreets,
+    rawStreetFeatures: projectedStreets,
+  };
+}
+
+//* ----------------- Get City Info -----------------
+export async function getCityInfo(surveyPolygon) {
+  if (!surveyPolygon) return { cityName: "لا يوجد", cityCode: "لا يوجد" };
+
+  const citiesLayer = templates.createServiceFeatureLayer(CITIES_SERVICE_URL);
+
+  const intersectingCities = await templates.intersectBureQuery(
+    surveyPolygon,
+    citiesLayer,
+    ["CITEYARNAME", "CITEYCODE"],
+  );
+
+  if (!intersectingCities || intersectingCities.length === 0) {
+    return { cityName: null, cityCode: null };
+  }
+
+  const attrs = intersectingCities[0].attributes || {};
+  return {
+    cityName: attrs.CITEYARNAME || null,
+    cityCode: attrs.CITEYCODE || null,
+  };
 }
 
 //* ----------------- Check Urban Area Boundary -----------------
@@ -317,70 +274,43 @@ export async function drawUrbanAreaPolygon(view, urbanAreaInfo) {
   });
 }
 
-//^ ----------------- Intersected Streets & City Info -----------------
+//* ----------------- Check Red Zones Boundary -----------------
+export async function checkRedZonesBoundary(surveyPolygon, targetWkid) {
+  const layerIds = RED_ZONE_LAYERS_CONFIG.map((layer) => layer.id);
 
-//* ----------------- Get Intersected Streets -----------------
-export async function getIntersectedStreets(surveyPolygon, targetWkid) {
-  if (!surveyPolygon) return { formattedStreets: [], rawStreetFeatures: [] };
-
-  const streetsLayer = templates.createServiceFeatureLayer(STREETS_SERVICE_URL);
-
-  const intersectingFeatures = await templates.intersectBureQuery(
+  //^ CalculateLayersOverlap
+  const rawOverlaps = await templates.calculateLayersOverlap(
     surveyPolygon,
-    streetsLayer,
-    ["STREETNAME", "STREETTYPE"],
-  );
-
-  const projectedStreets = await templates.reprojectFeatures(
-    intersectingFeatures,
+    RED_ZONES_SERVICE_URL,
+    layerIds,
     targetWkid,
-    "",
-    "geometryUTM",
   );
 
-  const formattedStreets = intersectingFeatures.map((f) => {
-    const attrs = f.attributes || {};
+  //^ Format Messages Error
+  const errors = rawOverlaps.map((item) => {
+    const config = RED_ZONE_LAYERS_CONFIG.find((c) => c.id === item.layerId);
     return {
-      streetType: attrs.STREETTYPE || "لا يوجد",
-      streetName: attrs.STREETNAME || "لا يوجد",
+      message: config ? config.message : "تداخل مع طبقة حظر",
+      overlappingArea: item.overlappingArea,
+      overlappigPercentage: item.overlappingPercentage,
     };
   });
 
   return {
-    formattedStreets,
-    rawStreetFeatures: projectedStreets,
+    isIntersecting: errors.length > 0,
+    errors: errors,
   };
 }
 
-//* ----------------- Get City Info -----------------
-export async function getCityInfo(surveyPolygon) {
-  if (!surveyPolygon) return { cityName: "لا يوجد", cityCode: "لا يوجد" };
-
-  const citiesLayer = templates.createServiceFeatureLayer(CITIES_SERVICE_URL);
-
-  const intersectingCities = await templates.intersectBureQuery(
-    surveyPolygon,
-    citiesLayer,
-    ["CITEYARNAME", "CITEYCODE"],
-  );
-
-  if (!intersectingCities || intersectingCities.length === 0) {
-    return { cityName: null, cityCode: null };
-  }
-
-  const attrs = intersectingCities[0].attributes || {};
-  return {
-    cityName: attrs.CITEYARNAME || null,
-    cityCode: attrs.CITEYCODE || null,
-  };
-}
-
-//* ----------------- Process Plan Validation  -----------------
+//* ----------------- Process Plan Validation -----------------
 export async function processPlanValidation(surveyPolygon, targetWkid) {
   let intersectedStreets = [];
   let rawStreetFeatures = [];
   let cityInfo = { cityName: null, cityCode: null };
+  let urbanAreaInfo = null;
+  let redZonesResult = { isIntersecting: false, errors: [] };
 
+  //^ streets
   try {
     const streetsData = await getIntersectedStreets(surveyPolygon, targetWkid);
     intersectedStreets = streetsData.formattedStreets;
@@ -389,25 +319,221 @@ export async function processPlanValidation(surveyPolygon, targetWkid) {
     console.warn("فشل جلب الشوارع المتقاطعة من MapServer:", err);
   }
 
+  //^ city
   try {
     cityInfo = await getCityInfo(surveyPolygon);
   } catch (err) {
     console.warn("فشل جلب معلومات المدينة من MapServer:", err);
   }
 
-  return {
-    planValidation: {
-      IsPlanIntersectsWithStreets: intersectedStreets.length > 0,
-      IsPlanIntersectsWithStreetsErrorMessage:
-        intersectedStreets.length > 0
-          ? "المخطط يتقاطع مع طبقة الشوارع"
-          : "المخطط لا يتقاطع مع طبقة الشوارع",
-      IntersectedStreetsWithPlan: intersectedStreets,
-      cityInfo: cityInfo,
+  //^ urban area
+  try {
+    urbanAreaInfo = await checkUrbanAreaBoundary(surveyPolygon, targetWkid);
+  } catch (err) {
+    console.warn("فشل جلب بيانات النطاق العمراني:", err);
+  }
+  const split = urbanAreaInfo?.splitAnalysis || {};
+  const boundaries = urbanAreaInfo?.urbanBoundariesList || [];
+  const primaryNetaq = boundaries.length > 0 ? boundaries[0] : null;
+
+  //^ red zone
+  try {
+    redZonesResult = await checkRedZonesBoundary(surveyPolygon, targetWkid);
+  } catch (err) {
+    console.warn("فشل فحص مناطق الحظر:", err);
+  }
+
+  const planValidation = {
+    //? street
+    IsPlanIntersectsWithStreets: intersectedStreets.length > 0,
+    IsPlanIntersectsWithStreetsErrorMessage:
+      intersectedStreets.length > 0
+        ? "المخطط يتقاطع مع طبقة الشوارع"
+        : "المخطط لا يتقاطع مع طبقة الشوارع",
+    IntersectedStreetsWithPlan: intersectedStreets,
+
+    //? city
+    cityInfo: {
+      cityName: cityInfo.cityName || "غير محدد",
+      cityCode: cityInfo.cityCode || "غير محدد",
     },
-    rawStreetFeatures: rawStreetFeatures,
+
+    //? urban area
+    IsPlanWithinUrbanBoundray:
+      urbanAreaInfo?.overallStatus === "داخل النطاق" ||
+      urbanAreaInfo?.overallStatus === "جزء داخل وجزء خارج",
+    IsPlanWithinUrbanBoundrayErrorMessage:
+      urbanAreaInfo?.message || "لم يتم تحديد النطاق العمراني",
+    innerPlanArea: split.insideArea || 0,
+    innerPlanAreaPercentage: split.insidePercentage || 0,
+    outerPlanArea: split.outsideArea || 0,
+    outerPlanAreaPercentage: split.outsidePercentage || 0,
+    UrbanBoundries: boundaries.map(
+      (b) => `نطاق ${b.URBANAREABOUNDARYYEAR || ""}`,
+    ),
+    netaqCondition: primaryNetaq?.NETAQ_CONDITION || "N/A",
+    netaqsInfo: boundaries.map((b) => ({
+      netaq: b.URBANAREABOUNDARYNAME_AR || "نطاق",
+      netaqno: String(b.URBANAREABOUNDARYYEAR || ""),
+      netaqCondition: b.NETAQ_CONDITION || "N/A",
+      cityName: cityInfo.cityName || "غير محدد",
+    })),
+
+    //? Red Zones
+    IsPlanIntersectsWithRedzones: redZonesResult.isIntersecting,
+    IsPlanIntersectsWithRedzonesError: redZonesResult.errors,
+  };
+
+  return {
+    planValidation,
+    rawStreetFeatures,
+    urbanAreaInfo,
   };
 }
+
+// * ----------------- Get Municipality -----------------
+export async function getMunicipality(code = MUNICIPALITY_CODE) {
+  //^َ Query
+  const feature = await templates.fetchBureQuery(
+    MUNI_SERVICE_URL,
+    `MUNICIPALITYUNIQUECODE = '${code}'`,
+    ["MUNICIPALITYARNAME", "AMANA"],
+    `لم يتم العثور على بيانات البلدية بالكود: ${code}`,
+  );
+
+  const attrs = feature.attributes;
+  const muniPolygon = feature.geometry;
+
+  //^َ Zone
+  const zone = await getZone(muniPolygon);
+  if (!zone) {
+    throw new Error(
+      "تعذر استنتاج الزون، حدود البلدية قد تقع خارج النطاقات المعتمدة.",
+    );
+  }
+
+  //^َ Process Plan Validation
+  const { planValidation, rawStreetFeatures, urbanAreaInfo } =
+    await processPlanValidation(muniPolygon, zone.wkid);
+
+  return {
+    type: "municipality",
+    code: code,
+    name:
+      (attrs.MUNICIPALITYARNAME || "") +
+      (attrs.AMANA ? " - " + attrs.AMANA : ""),
+    polygon: muniPolygon,
+    zone: zone,
+    urbanAreaInfo: urbanAreaInfo,
+    muniReport: { PlanValidation: planValidation },
+    rawStreetFeatures: rawStreetFeatures,
+    attributes: attrs,
+  };
+}
+
+// * ----------------- Get Survey Decision -----------------
+export async function getSurveyDecision(krokino) {
+  //^ Query
+  const feature = await templates.fetchBureQuery(
+    SURVEY_DECISION_URL,
+    `KROKINO = '${krokino}' and KROKITYPE='7018' and ISAPPROVED = 1`,
+    ["KROKINO"],
+    `لم يتم العثور على قرار مساحي معتمد مطابق للرقم: ${krokino}`,
+  );
+
+  const attrs = feature.attributes;
+  const decisionPolygon = feature.geometry;
+
+  //^ Zone
+  const finalZone = await getZone(decisionPolygon);
+  if (!finalZone) {
+    throw new Error(
+      "تعذر استنتاج الزون، القرار المساحي قد يقع خارج النطاقات المعتمدة.",
+    );
+  }
+
+  //^ Projection
+  const [{ esriGeometry: geoGeometry, geometryUTM: metricGeometry }] =
+    await templates.reprojectFeatures(
+      [{ geometry: decisionPolygon }],
+      finalZone.wkid,
+    );
+
+  //^ Calc Area
+  const calculatedArea = Math.abs(
+    templates.calculateProjectedArea(metricGeometry),
+  );
+
+  const { planValidation, rawStreetFeatures, urbanAreaInfo } =
+    await processPlanValidation(geoGeometry, finalZone.wkid);
+
+  return {
+    type: "decision",
+    code: krokino,
+    name: `القرار المساحي: ${krokino}`,
+    landArea: calculatedArea,
+    polygon: geoGeometry,
+    metricPolygon: metricGeometry,
+    zone: finalZone,
+    urbanAreaInfo: urbanAreaInfo,
+    decisionReport: { PlanValidation: planValidation },
+    rawStreetFeatures: rawStreetFeatures,
+    attributes: attrs,
+  };
+}
+
+//*------------------ Draw polygon (Municipality, Survey Decision) -----------------
+export async function drawContextPolygon(view, context) {
+  if (!view || !context || !context.polygon) return null;
+
+  const isDecision = context.type === "decision";
+
+  if (isDecision && context.urbanAreaInfo?.splitAnalysis) {
+    const { insideGeometry, outsideGeometry } =
+      context.urbanAreaInfo.splitAnalysis;
+    const layers = [];
+
+    if (insideGeometry) {
+      const insideLayer = await templates.drawPolygon(view, insideGeometry, {
+        title: "القرار المساحي - داخل النطاق",
+        fillColor: [76, 175, 80, 0.35],
+        outlineColor: [46, 125, 50, 0.9],
+        outlineStyle: "solid",
+        outlineWidth: 2.5,
+        index: 0,
+        skipZoom: false,
+      });
+      layers.push(insideLayer);
+    }
+
+    if (outsideGeometry) {
+      const outsideLayer = await templates.drawPolygon(view, outsideGeometry, {
+        title: "القرار المساحي - خارج النطاق",
+        fillColor: [244, 67, 54, 0.35],
+        outlineColor: [211, 47, 47, 0.9],
+        outlineStyle: "solid",
+        outlineWidth: 2.5,
+        index: 0,
+        skipZoom: true,
+      });
+      layers.push(outsideLayer);
+    }
+
+    return layers;
+  }
+
+  return await templates.drawPolygon(view, context.polygon, {
+    title: "حدود البلدية",
+    fillColor: [255, 100, 0, 0.2],
+    outlineColor: [255, 69, 0, 0.9],
+    outlineStyle: "dash",
+    outlineWidth: 2.5,
+    index: 0,
+    skipZoom: false,
+    zoomExpand: 1.3,
+  });
+}
+
 //^ ----------------- Process Plan -----------------
 
 //* ----------------- Process Municipality Plan -----------------
@@ -482,13 +608,6 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     activeContext,
   );
 
-  // ^ Process Plan Validation
-  const surveyPolygon = firstFeature.esriGeometry;
-  const { planValidation, rawStreetFeatures } = await processPlanValidation(
-    surveyPolygon,
-    zone.wkid,
-  );
-
   return {
     isValid: true,
     boundsCheck,
@@ -497,8 +616,7 @@ async function processMunicipalityPlan(rawLayers, activeContext) {
     reprojectedLayers,
     statistics,
     ideaValidation,
-    planValidation,
-    rawStreetFeatures,
+    rawStreetFeatures: activeContext.rawStreetFeatures || [],
     designWarnings: designValidation.warnings || [], //^ Include any warnings from design validation
   };
 }
@@ -611,13 +729,6 @@ async function processDecisionPlan(rawLayers, activeContext) {
     activeContext,
   );
 
-  // ^ Process Plan Validation
-  const surveyPolygon = activeContext.polygon;
-  const { planValidation, rawStreetFeatures } = await processPlanValidation(
-    surveyPolygon,
-    zone.wkid,
-  );
-
   return {
     isValid: true,
     boundsCheck,
@@ -626,8 +737,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
     reprojectedLayers,
     statistics,
     ideaValidation,
-    planValidation,
-    rawStreetFeatures,
+    rawStreetFeatures: activeContext.rawStreetFeatures || [],
     designWarnings: designValidation.warnings || [], //^ Include any warnings from design validation
   };
 }
