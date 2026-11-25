@@ -314,7 +314,12 @@ export async function checkRedZonesBoundary(surveyPolygon, targetWkid) {
 }
 
 //* ----------------- Process Plan Validation -----------------
-export async function processPlanValidation(surveyPolygon, targetWkid) {
+export async function processPlanValidation(
+  surveyPolygon,
+  targetWkid,
+  options = { checkUrban: true, checkRedZones: true },
+) {
+  const { checkUrban = true, checkRedZones = true } = options || {};
   let intersectedStreets = [];
   let rawStreetFeatures = [];
   let cityInfo = { cityName: null, cityCode: null };
@@ -338,21 +343,20 @@ export async function processPlanValidation(surveyPolygon, targetWkid) {
   }
 
   //^ urban area
-  try {
-    urbanAreaInfo = await checkUrbanAreaBoundary(surveyPolygon, targetWkid);
-  } catch (err) {
-    console.warn("فشل جلب بيانات النطاق العمراني:", err);
-  }
-  const split = urbanAreaInfo?.splitAnalysis || {};
-  const boundaries = urbanAreaInfo?.urbanBoundariesList || [];
-  const primaryNetaq = boundaries.length > 0 ? boundaries[0] : null;
+  if (checkUrban)
+    try {
+      urbanAreaInfo = await checkUrbanAreaBoundary(surveyPolygon, targetWkid);
+    } catch (err) {
+      console.warn("فشل جلب بيانات النطاق العمراني:", err);
+    }
 
   //^ red zone
-  try {
-    redZonesResult = await checkRedZonesBoundary(surveyPolygon, targetWkid);
-  } catch (err) {
-    console.warn("فشل فحص مناطق الحظر:", err);
-  }
+  if (checkRedZones)
+    try {
+      redZonesResult = await checkRedZonesBoundary(surveyPolygon, targetWkid);
+    } catch (err) {
+      console.warn("فشل فحص مناطق الحظر:", err);
+    }
 
   const planValidation = {
     //? street
@@ -368,32 +372,44 @@ export async function processPlanValidation(surveyPolygon, targetWkid) {
       cityName: cityInfo.cityName || "غير محدد",
       cityCode: cityInfo.cityCode || "غير محدد",
     },
-
-    //? urban area
-    IsPlanWithinUrbanBoundray:
-      urbanAreaInfo?.overallStatus === "داخل النطاق" ||
-      urbanAreaInfo?.overallStatus === "جزء داخل وجزء خارج",
-    IsPlanWithinUrbanBoundrayErrorMessage:
-      urbanAreaInfo?.message || "لم يتم تحديد النطاق العمراني",
-    innerPlanArea: split.insideArea || 0,
-    innerPlanAreaPercentage: split.insidePercentage || 0,
-    outerPlanArea: split.outsideArea || 0,
-    outerPlanAreaPercentage: split.outsidePercentage || 0,
-    UrbanBoundries: boundaries.map(
-      (b) => `نطاق ${b.URBANAREABOUNDARYYEAR || ""}`,
-    ),
-    netaqCondition: primaryNetaq?.NETAQ_CONDITION || "N/A",
-    netaqsInfo: boundaries.map((b) => ({
-      netaq: b.URBANAREABOUNDARYNAME_AR || "نطاق",
-      netaqno: String(b.URBANAREABOUNDARYYEAR || ""),
-      netaqCondition: b.NETAQ_CONDITION || "N/A",
-      cityName: cityInfo.cityName || "غير محدد",
-    })),
-
-    //? Red Zones
-    IsPlanIntersectsWithRedzones: redZonesResult.isIntersecting,
-    IsPlanIntersectsWithRedzonesError: redZonesResult.errors,
   };
+
+  //? urban area
+  if (urbanAreaInfo && checkUrban) {
+    const split = urbanAreaInfo?.splitAnalysis || {};
+    const boundaries = urbanAreaInfo?.urbanBoundariesList || [];
+    const primaryNetaq = boundaries.length > 0 ? boundaries[0] : null;
+
+    Object.assign(planValidation, {
+      IsPlanWithinUrbanBoundray:
+        urbanAreaInfo?.overallStatus === "داخل النطاق" ||
+        urbanAreaInfo?.overallStatus === "جزء داخل وجزء خارج",
+      IsPlanWithinUrbanBoundrayErrorMessage:
+        urbanAreaInfo?.message || "لم يتم تحديد النطاق العمراني",
+      innerPlanArea: split.insideArea || 0,
+      innerPlanAreaPercentage: split.insidePercentage || 0,
+      outerPlanArea: split.outsideArea || 0,
+      outerPlanAreaPercentage: split.outsidePercentage || 0,
+      UrbanBoundries: boundaries.map(
+        (b) => `نطاق ${b.URBANAREABOUNDARYYEAR || ""}`,
+      ),
+      netaqCondition: primaryNetaq?.NETAQ_CONDITION || "N/A",
+      netaqsInfo: boundaries.map((b) => ({
+        netaq: b.URBANAREABOUNDARYNAME_AR || "نطاق",
+        netaqno: String(b.URBANAREABOUNDARYYEAR || ""),
+        netaqCondition: b.NETAQ_CONDITION || "N/A",
+        cityName: cityInfo.cityName || "غير محدد",
+      })),
+    });
+  }
+
+  //? Red Zones
+  if (checkRedZones) {
+    Object.assign(planValidation, {
+      IsPlanIntersectsWithRedzones: redZonesResult.isIntersecting,
+      IsPlanIntersectsWithRedzonesError: redZonesResult.errors,
+    });
+  }
 
   return {
     planValidation,
@@ -425,7 +441,10 @@ export async function getMunicipality(code = MUNICIPALITY_CODE) {
 
   //^َ Process Plan Validation
   const { planValidation, rawStreetFeatures, urbanAreaInfo } =
-    await processPlanValidation(muniPolygon, zone.wkid);
+    await processPlanValidation(muniPolygon, zone.wkid, {
+      checkUrban: false,
+      checkRedZones: false,
+    });
 
   return {
     type: "municipality",
