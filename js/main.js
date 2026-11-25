@@ -48,24 +48,19 @@ async function initializeApp() {
     let currentStreetFeatures = [];
 
     fetchContextBtn.addEventListener("click", async () => {
-      if (activeLayer) {
-        if (Array.isArray(activeLayer)) {
-          view.map.removeMany(activeLayer);
-        } else {
-          view.map.remove(activeLayer);
-        }
-      }
-      if (activeUrbanLayer) {
-        if (Array.isArray(activeUrbanLayer)) {
-          view.map.removeMany(activeUrbanLayer);
-        } else {
-          view.map.remove(activeUrbanLayer);
-        }
-      }
+      view.map.removeAll();
+      templates.highlightParcel(view, null);
+      templates.drawAllParcelLineLabels(view, []);
 
       activeContext = null;
       activeLayer = null;
       activeUrbanLayer = null;
+      currentCombinedReport = null;
+      currentReprojectedLayers = null;
+      currentStreetFeatures = [];
+
+      statisticsPanel.innerHTML = "";
+      statusPanel.innerHTML = "";
       templates.renderPlanValidation(null, planValidationPanel);
 
       uploadSectionDiv.classList.add("disabled");
@@ -210,11 +205,18 @@ async function initializeApp() {
           `;
         }
 
+        const statusColor =
+          boundsCheck.status === "outside"
+            ? "red"
+            : boundsCheck.status === "partial"
+              ? "orange"
+              : "green";
+
         statusPanel.innerHTML = `
           <div dir="rtl" style="text-align: right; display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
               <strong>حالة المخطط:</strong> 
-              <span style="color:green;">${boundsCheck.message}</span>
+              <span style="color:${statusColor}; font-weight:bold;">${boundsCheck.message}</span>
             </div>
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
               <strong>نطاق <span dir="ltr" style="display:inline-block;">UTM</span> المستنتج:</strong> 

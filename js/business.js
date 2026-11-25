@@ -726,7 +726,7 @@ async function processDecisionPlan(rawLayers, activeContext) {
   if (!globalHasInsideOrPartial) {
     finalStatus = "outside";
     finalMessage = "جميع طبقات المخطط تقع خارج القرار المساحي";
-    isValid = false;
+    isValid = true;
   } else if (globalHasOutside) {
     finalStatus = "partial";
     finalMessage = "المخطط مقبول لكن بعض عناصر الطبقات خارج حدود القرار";
