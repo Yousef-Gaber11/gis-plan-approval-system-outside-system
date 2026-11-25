@@ -5,7 +5,8 @@ export const MUNICIPALITY_CODE = "011001001";
 const MUNI_SERVICE_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/BasicMap/MapServer/4";
 const SURVEY_DECISION_URL =
-  "https://gisstg229.momah.gov.sa/server/rest/services/Test/EditLayers/mapServer/2";
+  "https://gisstg227.momra.gov.sa/arcgis/rest/services/kroki/Kroki_New/mapServer/0/";
+// "https://gisstg229.momah.gov.sa/server/rest/services/Test/EditLayers/mapServer/2";
 const DISTRICTS_SERVICE_URL =
   "https://gisstg229.momah.gov.sa/server/rest/services/Test/BasicMap/MapServer/3";
 
@@ -189,9 +190,19 @@ export async function checkUrbanAreaBoundary(surveyPolygon, targetWkid) {
     "URBANAREABOUNDARYTYPE <> 3",
   );
 
+  //! Check if there are no intersected features
   if (!intersectedFeatures || intersectedFeatures.length === 0) {
     return {
       overallStatus: "خارج النطاق",
+      geometry: null,
+      splitAnalysis: {
+        insideGeometry: null,
+        outsideGeometry: surveyPolygon,
+        insideArea: 0,
+        outsideArea: 0,
+        insidePercentage: 0,
+        outsidePercentage: 100,
+      },
       urbanBoundariesList: [],
       message: "القرار المساحي يقع بالكامل خارج النطاق العمراني المعتمد.",
     };
@@ -523,10 +534,10 @@ export async function drawContextPolygon(view, context) {
   }
 
   return await templates.drawPolygon(view, context.polygon, {
-    title: "حدود البلدية",
-    fillColor: [255, 100, 0, 0.2],
-    outlineColor: [255, 69, 0, 0.9],
-    outlineStyle: "dash",
+    title: isDecision ? "القرار المساحي - خارج النطاق" : "حدود البلدية",
+    fillColor: isDecision ? [244, 67, 54, 0.35] : [255, 100, 0, 0.2],
+    outlineColor: isDecision ? [211, 47, 47, 0.9] : [255, 69, 0, 0.9],
+    outlineStyle: isDecision ? "solid" : "dash",
     outlineWidth: 2.5,
     index: 0,
     skipZoom: false,

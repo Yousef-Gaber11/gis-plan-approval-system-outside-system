@@ -48,8 +48,21 @@ async function initializeApp() {
     let currentStreetFeatures = [];
 
     fetchContextBtn.addEventListener("click", async () => {
-      if (activeLayer) view.map.layers.remove(activeLayer);
-      if (activeUrbanLayer) view.map.layers.remove(activeUrbanLayer);
+      if (activeLayer) {
+        if (Array.isArray(activeLayer)) {
+          view.map.removeMany(activeLayer);
+        } else {
+          view.map.remove(activeLayer);
+        }
+      }
+      if (activeUrbanLayer) {
+        if (Array.isArray(activeUrbanLayer)) {
+          view.map.removeMany(activeUrbanLayer);
+        } else {
+          view.map.remove(activeUrbanLayer);
+        }
+      }
+
       activeContext = null;
       activeLayer = null;
       activeUrbanLayer = null;
