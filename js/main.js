@@ -144,7 +144,7 @@ async function initializeApp() {
           );
         //^ read the shapefileApi
         const rawLayers = await templates.parseShapefile(file);
-        //^ process the processPlanValidation
+        //^ process the processPlan
         const validationResult = await business.processPlan(
           rawLayers,
           activeContext,
@@ -160,7 +160,6 @@ async function initializeApp() {
           reprojectedLayers,
           statistics,
           ideaValidation,
-          planValidation,
           rawStreetFeatures,
         } = validationResult;
 

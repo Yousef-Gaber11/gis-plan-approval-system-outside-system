@@ -822,6 +822,9 @@ export function drawAllParcelLineLabels(view, allLabelsData) {
     });
     view.map.add(parcelLabelsGraphicsLayer);
   } else {
+    if (!view.map.layers.includes(parcelLabelsGraphicsLayer)) {
+      view.map.add(parcelLabelsGraphicsLayer);
+    }
     parcelLabelsGraphicsLayer.removeAll();
   }
 
@@ -877,6 +880,9 @@ export function highlightParcel(view, esriGeometry) {
     highlightGraphicsLayer = new GraphicsLayer({ title: "القطعة المختارة" });
     view.map.add(highlightGraphicsLayer);
   } else {
+    if (!view.map.layers.includes(highlightGraphicsLayer)) {
+      view.map.add(highlightGraphicsLayer);
+    }
     highlightGraphicsLayer.removeAll();
   }
 
@@ -1184,6 +1190,7 @@ export async function calculateLayersOverlap(
   serviceUrl,
   layerIds = [],
   targetWkid,
+  surveyArea = null,
 ) {
   if (!surveyPolygon || !serviceUrl || layerIds.length === 0) {
     return [];
@@ -1191,13 +1198,6 @@ export async function calculateLayersOverlap(
 
   const { geometryEngine } = getEsriModules();
   const overlapResults = [];
-
-  //? reproject survey polygon to UTM for area calculation
-  const [{ geometryUTM: surveyUTM }] = await reprojectFeatures(
-    [{ geometry: surveyPolygon }],
-    targetWkid,
-  );
-  const totalArea = Math.abs(calculateProjectedArea(surveyUTM));
 
   //? loop by ID to chk intersection with each layer -> calc area & percentage
   for (const id of layerIds) {
@@ -1208,7 +1208,7 @@ export async function calculateLayersOverlap(
       const intersectedFeatures = await intersectBureQuery(
         surveyPolygon,
         searchLayer,
-        ["OBJECTID"],
+        [],
       );
 
       if (intersectedFeatures && intersectedFeatures.length > 0) {
@@ -1233,7 +1233,7 @@ export async function calculateLayersOverlap(
 
           if (overlappingArea > 0) {
             const overlappingPercentage =
-              totalArea > 0 ? round2((overlappingArea / totalArea) * 100) : 0;
+              surveyArea > 0 ? round2((overlappingArea / surveyArea) * 100) : 0;
 
             overlapResults.push({
               layerId: id,

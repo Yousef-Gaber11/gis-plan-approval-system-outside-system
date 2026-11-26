@@ -286,7 +286,11 @@ export async function drawUrbanAreaPolygon(view, urbanAreaInfo) {
 }
 
 //* ----------------- Check Red Zones Boundary -----------------
-export async function checkRedZonesBoundary(surveyPolygon, targetWkid) {
+export async function checkRedZonesBoundary(
+  surveyPolygon,
+  targetWkid,
+  surveyArea,
+) {
   const layerIds = RED_ZONE_LAYERS_CONFIG.map((layer) => layer.id);
 
   //^ CalculateLayersOverlap
@@ -295,6 +299,7 @@ export async function checkRedZonesBoundary(surveyPolygon, targetWkid) {
     RED_ZONES_SERVICE_URL,
     layerIds,
     targetWkid,
+    surveyArea,
   );
 
   //^ Format Messages Error
@@ -317,6 +322,7 @@ export async function checkRedZonesBoundary(surveyPolygon, targetWkid) {
 export async function processPlanValidation(
   surveyPolygon,
   targetWkid,
+  surveyArea,
   options = { checkUrban: true, checkRedZones: true },
 ) {
   const { checkUrban = true, checkRedZones = true } = options || {};
@@ -353,7 +359,11 @@ export async function processPlanValidation(
   //^ red zone
   if (checkRedZones)
     try {
-      redZonesResult = await checkRedZonesBoundary(surveyPolygon, targetWkid);
+      redZonesResult = await checkRedZonesBoundary(
+        surveyPolygon,
+        targetWkid,
+        surveyArea,
+      );
     } catch (err) {
       console.warn("فشل فحص مناطق الحظر:", err);
     }
@@ -494,8 +504,9 @@ export async function getSurveyDecision(krokino) {
     templates.calculateProjectedArea(metricGeometry),
   );
 
+  //^ Process Plan Validation
   const { planValidation, rawStreetFeatures, urbanAreaInfo } =
-    await processPlanValidation(geoGeometry, finalZone.wkid);
+    await processPlanValidation(geoGeometry, finalZone.wkid, calculatedArea);
 
   return {
     type: "decision",
