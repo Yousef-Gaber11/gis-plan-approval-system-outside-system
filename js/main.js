@@ -105,6 +105,9 @@ async function initializeApp() {
     //* //^ step 1 --> chk URL parameters load (decision or municipality)
     checkUrlParameters();
 
+    //* step  --> setup incoming messages from parent
+    setupIncomingParentMessages();
+
     //* step 2 --> process the uploaded shapefile
     const fileInput = document.getElementById("shpFileInput");
     if (fileInput) {
@@ -226,7 +229,6 @@ async function initializeApp() {
       //* renderParcelViewer بديل
       notifyParent("PARCEL_SELECTED", {
         attributes: parcel.attributes,
-        geometry: parcel.geometry,
       });
     });
   } catch (error) {
@@ -244,6 +246,21 @@ function checkUrlParameters() {
   } else if (muniCode) {
     loadContext("municipality", muniCode);
   }
+}
+
+function setupIncomingParentMessages() {
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.target !== "GIS") return;
+
+    if (data.command === "LOAD_DECISION") {
+      loadContext("decision", data.code);
+    } else if (data.command === "LOAD_MUNICIPALITY") {
+      loadContext("municipality", data.code);
+    } else if (data.command === "CLEAR_MAP") {
+      if (view) view.map.removeAll();
+    }
+  });
 }
 
 initializeApp();

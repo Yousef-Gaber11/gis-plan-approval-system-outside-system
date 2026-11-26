@@ -1,0 +1,147 @@
+  * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            background-color: #f8f9fa;
+        }
+
+        #sidebar {
+            width: 580px;
+            height: 100%;
+            background-color: #f8f9fa;
+            border-left: 1px solid #dee2e6;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+
+        #mapContainer {
+            flex: 1;
+            height: 100%;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .context-panel {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 5px;
+        }
+
+        .context-panel h4 {
+            margin-top: 0;
+            color: #1e293b;
+            font-size: 15px;
+            margin-bottom: 12px;
+        }
+
+        .radio-group {
+            margin-bottom: 12px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .radio-label {
+            cursor: pointer;
+            font-weight: bold;
+            color: #475569;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .context-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        #fetchContextBtn {
+            padding: 8px 14px;
+            background-color: #0ea5e9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        #fetchContextBtn:hover {
+            background-color: #0284c7;
+        }
+
+        #planValidationViewer,
+        #jsonViewer,
+        #validationViewer {
+            background-color: #ffffff;
+            color: #212529;
+            padding: 14px;
+            border-radius: 6px;
+            min-height: 220px;
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: auto;
+            direction: ltr;
+            text-align: left;
+            border: 1px solid #ced4da;
+            font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 13.5px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+            margin-top: 8px;
+        }
+
+        .waiting-text {
+            color: #6c757d;
+            font-style: italic;
+            direction: rtl;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .divider {
+            margin: 10px 0;
+            border: none;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .json-formatter-row {
+            line-height: 1.6 !important;
+            white-space: pre-wrap !important;
+            word-break: break-word !important;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background-color: #0284c7;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 5px;
+        }

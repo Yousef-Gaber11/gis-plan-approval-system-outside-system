@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Parent</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/json-formatter-js@2.3.4/dist/json-formatter.umd.min.js"></script>
+
+    <link rel="stylesheet" href="./css/parent.css">
+</head>
+
+<body>
+    <div id="sidebar">
+        <h2>Parent Page</h2>
+
+        <div class="context-panel">
+            <h4>اختيار وجلب المسار</h4>
+
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="pathType" id="radioMuni" checked> حدود بلدية
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="pathType" id="radioDecision"> قرار مساحي
+                </label>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="inputMuniCode" class="context-input" value="011001001"
+                    placeholder="أدخل كود البلدية">
+                <input type="text" id="inputKrokino" class="context-input" value="43013394328"
+                    placeholder="أدخل رقم القرار المساحي" style="display: none;">
+                <button id="fetchContextBtn">إرسال للخريطة</button>
+            </div>
+
+        </div>
+
+        <h3>1. التقرير الأساسي (CONTEXT_LOADED Payload)</h3>
+        <div id="planValidationViewer" dir="ltr">
+            <div class="waiting-text">في انتظار استلام بيانات التقرير...</div>
+        </div>
+
+        <hr class="divider" />
+
+        <h3>2. إحصائيات المخطط المرفوع (PLAN_PROCESSED_SUCCESS)</h3>
+        <div id="jsonViewer" dir="ltr">
+            <div class="waiting-text">في انتظار رفع وتخريط المخطط من الخريطة...</div>
+        </div>
+
+        <hr class="divider" />
+
+        <h3>3. تفاصيل القطعة المختارة (PARCEL_SELECTED)</h3>
+        <div id="validationViewer" dir="ltr">
+            <div class="waiting-text">في انتظار النقر على قطعة أرض على الخريطة...</div>
+        </div>
+    </div>
+
+    <!--^ GIS Iframe -->
+    <div id="mapContainer">
+        <iframe id="gisIframe" src="./index.html"></iframe>
+    </div>
+
+    <script type="module" src="./js/parent.js"></script>
+</body>
+
+</html>
