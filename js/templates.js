@@ -86,7 +86,7 @@ export function setupLayerListWidget(view) {
     expandTooltip: "قائمة الطبقات",
   });
 
-  view.ui.add(expandWidget, "top-right");
+  view.ui.add(expandWidget, "top-left");
 }
 //!-------------------------------------------       Query        -----------------------------------
 
@@ -645,21 +645,6 @@ export function validatePlanRules(layers, activeContext) {
   };
 }
 
-//!-------------------------------------------    Render (Statistics,validation)        -----------------------------------
-
-//* Render Statistics & Validation
-export function renderStatistics(combinedReport, statisticsPanel) {
-  if (!statisticsPanel) return;
-  statisticsPanel.innerHTML = "";
-  statisticsPanel.classList.remove("waiting");
-
-  const formatter = new JSONFormatter(combinedReport, 3, {
-    hoverPreviewEnabled: false,
-    theme: "light",
-  });
-  statisticsPanel.appendChild(formatter.render());
-}
-
 //!-------------------------------------------  Drawing Layers on Map        -----------------------------------
 
 function createMapLayer(geoJson, renderer, labelClass, title) {
@@ -900,46 +885,6 @@ export function highlightParcel(view, esriGeometry) {
     },
   });
   highlightGraphicsLayer.add(graphic);
-}
-
-//* Render Parcel Viewer
-export function renderParcelViewer(
-  parcelData,
-  combinedReport,
-  statisticsPanel,
-) {
-  if (!statisticsPanel) return;
-  statisticsPanel.innerHTML = "";
-
-  const backBtn = document.createElement("button");
-  backBtn.style.cssText = `
-      display: block;
-      margin-bottom: 12px;
-      padding: 7px 14px;
-      background-color: #007acc;
-      color: #ffffff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: bold;
-    `;
-  backBtn.textContent = "العودة إلى تقرير المخطط الإجمالي";
-
-  backBtn.onclick = () => {
-    if (highlightGraphicsLayer) {
-      highlightGraphicsLayer.removeAll();
-    }
-    renderStatistics(combinedReport, statisticsPanel);
-  };
-
-  statisticsPanel.appendChild(backBtn);
-
-  const formatter = new JSONFormatter(parcelData, 1, {
-    hoverPreviewEnabled: true,
-    theme: "light",
-  });
-  statisticsPanel.appendChild(formatter.render());
 }
 
 //! التحققات المطلوبة على الفكرة التصميمية
@@ -1249,25 +1194,4 @@ export async function calculateLayersOverlap(
   }
 
   return overlapResults;
-}
-
-//* Helper لعرض النطاق العمراني المعتمد وقائمة النطاقات التفاعلية
-export function renderPlanValidation(reportData, planValidationPanel) {
-  if (!planValidationPanel) return;
-
-  if (!reportData) {
-    planValidationPanel.innerHTML = "في انتظار جلب البيانات...";
-    planValidationPanel.classList.add("waiting");
-    return;
-  }
-
-  planValidationPanel.innerHTML = "";
-  planValidationPanel.classList.remove("waiting");
-
-  const formatter = new JSONFormatter(reportData, 3, {
-    hoverPreviewEnabled: false,
-    theme: "light",
-  });
-
-  planValidationPanel.appendChild(formatter.render());
 }

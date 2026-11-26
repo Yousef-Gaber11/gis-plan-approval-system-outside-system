@@ -451,7 +451,7 @@ export async function getMunicipality(code = MUNICIPALITY_CODE) {
 
   //^َ Process Plan Validation
   const { planValidation, rawStreetFeatures, urbanAreaInfo } =
-    await processPlanValidation(muniPolygon, zone.wkid, {
+    await processPlanValidation(muniPolygon, zone.wkid, null, {
       checkUrban: false,
       checkRedZones: false,
     });
@@ -462,6 +462,7 @@ export async function getMunicipality(code = MUNICIPALITY_CODE) {
     name:
       (attrs.MUNICIPALITYARNAME || "") +
       (attrs.AMANA ? " - " + attrs.AMANA : ""),
+    landArea: null,
     polygon: muniPolygon,
     zone: zone,
     urbanAreaInfo: urbanAreaInfo,
@@ -555,7 +556,7 @@ export async function drawContextPolygon(view, context) {
         outlineStyle: "solid",
         outlineWidth: 2.5,
         index: 0,
-        skipZoom: true,
+        skipZoom: false,
       });
       layers.push(outsideLayer);
     }
